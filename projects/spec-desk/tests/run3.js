@@ -33,7 +33,7 @@ const fs = require('fs');
   await page.fill('#askQ', 'What cabinet hinges and drawer slides are required?');
   let n = (await calls()).length; t0 = t();
   await page.click('#askGo');
-  await page.waitForSelector('#askOut .answer h2', { timeout: 60000 });
+  await page.waitForFunction(() => !document.querySelector('#askGo').disabled && document.querySelector('#askOut .answer h2'), null, { timeout: 120000 });
   const askC = (await calls()).slice(n);
   const askR = await ev(() => ({ refs: [...document.querySelectorAll('#askOut .cite .ref[data-rid]')].map(b => b.textContent), read: document.querySelector('#askOut details summary').textContent }));
   log('Ask over the whole 921-page book: finds the hinge paragraph in 06 41 16', askR.refs.some(r => /^06 41 16/.test(r)), `${askR.read}; prompt ${Math.round(askC[0].len / 1000)}k chars; cites ${askR.refs.slice(0, 3).join(', ')}; ${(t() - t0)} ms in the app`);
@@ -47,8 +47,10 @@ const fs = require('fs');
   await page.waitForFunction(() => { const s = state.summaries.get('06 41 16'); return s && !s.running; }, null, { timeout: 60000 });
   const sumC = (await calls()).slice(n);
   const sumR = await ev(() => { const s = state.secMap.get('06 41 16'); const sum = state.summaries.get('06 41 16'); return { recs: s.records.length, chunks: sum.chunks, points: sum.points.length }; });
-  const sentIds = new Set(); for (const c of await ev(k => window.__calls.slice(k).map(c => c.prompt), n)) for (const m of c.matchAll(/^\[R(\d+)\]/gm)) sentIds.add(m[1]);
-  log('Summary of the 40-page section: split into several requests, every paragraph sent once', sumC.length > 1 && sentIds.size === sumR.recs, `${sumC.length} requests (${sumC.map(c => Math.round(c.len / 1000) + 'k').join(', ')} chars), ${sentIds.size} of ${sumR.recs} paragraphs sent, ${sumR.points} points`);
+  const sentIds = new Set(); for (const c of await ev(k => window.__calls.slice(k).filter(c => c.prompt.startsWith('You are summarizing')).map(c => c.prompt), n)) for (const m of c.matchAll(/^\[R(\d+)\]/gm)) sentIds.add(m[1]);
+  const sumFirst = sumC.filter(c => c.kind.startsWith('You are summarizing')).length;
+  console.log(`     checking the summary added ${sumC.length - sumFirst} requests (${JSON.stringify(await ev(() => state.summaries.get('06 41 16').check.rounds.map(R => R.notes)))})`);
+  log('Summary of the 40-page section: split into several requests, every paragraph sent once', sumFirst > 1 && sentIds.size === sumR.recs, `${sumC.length} requests (${sumC.map(c => Math.round(c.len / 1000) + 'k').join(', ')} chars), ${sentIds.size} of ${sumR.recs} paragraphs sent, ${sumR.points} points`);
 
   // Compare 06 41 16 against the proposal
   await page.click('.tabs button[data-tab="compare"]');
@@ -60,6 +62,7 @@ const fs = require('fs');
   await page.waitForFunction(() => /^Finished/.test(document.querySelector('#cmpStatus').textContent) || document.querySelector('#cmpStatus .err'), null, { timeout: 60000 });
   const cmpC = (await calls()).slice(n);
   const cmpR = await ev(() => ({ status: document.querySelector('#cmpStatus').textContent, conflicts: state.cmpItems.filter(i => i.status === 'conflict').map(i => i.topic) }));
+  console.log(`     comparison: ${cmpC.filter(c => c.kind.startsWith('Compare a construction') ).length} comparison requests + ${cmpC.length - cmpC.filter(c => c.kind.startsWith('Compare a construction')).length} checking requests; ${await ev(() => state.cmpCheck && state.cmpCheck.stopped)}`);
   log('Compare the 40-page section: split into parts, conflicts still found', cmpC.length > 1 && cmpR.conflicts.length >= 2, `${cmpC.length} requests; ${cmpR.status}; conflicts: ${cmpR.conflicts.join(', ')}`);
 
   // Deep check on the two millwork sections
@@ -95,8 +98,8 @@ const fs = require('fs');
   await page.fill('#daQ', 'Which sheets show the interior elevation for room 150 and what plastic laminate is used?');
   n = (await calls()).length; t0 = t();
   await page.click('#daGo');
-  await page.waitForSelector('#daOut .answer, #daOut .warn', { timeout: 300000 });
-  const daC = (await calls()).slice(n);
+  await page.waitForFunction(() => !document.querySelector('#daGo').disabled && document.querySelector('#daOut .answer, #daOut .warn'), null, { timeout: 300000 });
+  const daC = (await calls()).slice(n, n + 1);
   const daR = await ev(() => ({ looked: [...document.querySelectorAll('#daOut details.read li')].map(l => l.textContent.trim().slice(0, 40)), srcs: [...document.querySelectorAll('#daOut .cite .q')].slice(0, 4).map(q => q.textContent) }));
   log('Ask the drawings across 512 sheets: picks the right sheets and renders them', daC.length === 1 && daR.looked.some(l => /A-\d+/.test(l)), `${(t() - t0) / 1000}s; looked at ${daR.looked.join(' / ')}; ${daC[0] && daC[0].images} images, ${daC[0] && Math.round(daC[0].imgBytes / 1e6 * 10) / 10} MB`);
   await mem('after asking the drawings');

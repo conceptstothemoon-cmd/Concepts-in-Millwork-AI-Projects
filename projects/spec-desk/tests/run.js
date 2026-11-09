@@ -52,15 +52,25 @@ const results = []; const log = (name, ok, detail) => { results.push({ name, ok,
   const sumBad = await page.locator('#sumBox .cite .vbad').count();
   const sumPts = await ev(() => state.summaries.get('06 41 16').points.length);
   log('Summary with sources: invented quote marked red', sumBad === 1, `${sumPts} points, ${sumBad} flagged`);
+  const sc = await ev(() => { const s = state.summaries.get('06 41 16'); return { log: s.check, pts: s.points.map(p => `${p.chk ? p.chk.status : 'unchecked'}${p.round ? ' (added r' + p.round + ')' : ''}: ${p.statement.slice(0, 60)}`), html: document.querySelector('#sumBox .chk-log summary') && document.querySelector('#sumBox .chk-log summary').textContent }; });
+  console.log('     summary check:', JSON.stringify(sc.log.rounds.map(R => R.notes)), '\n     ', sc.html);
+  log('Auto-check (summary): missed "Locks" requirement added by the second look', sc.pts.some(p => /added r1/.test(p) && /Locks/.test(p)), sc.pts.filter(p => /Locks/.test(p)).join());
+  log('Auto-check (summary): wrong 75 lbf corrected to the spec\'s 100 lbf', sc.pts.some(p => /^corrected: Drawer Slides: Full-extension, ball-bearing, 100 lbf/.test(p)), sc.pts.filter(p => /slide/i.test(p)).join());
+  log('Auto-check (summary): hinge point with invented quote flagged for a person, not corrected', sc.pts.some(p => /^disputed: Hinges are concealed/.test(p)), sc.pts.filter(p => /hinge/i.test(p)).join());
+  log('Auto-check (summary): every point checked; loop settled within 5 rounds', !sc.pts.some(p => /^unchecked/.test(p)) && sc.log.rounds.length <= 5 && /Settled/.test(sc.log.stopped), `${sc.log.rounds.length} rounds: ${sc.log.stopped}`);
   await shot('02-summary');
 
   // ---------- Ask ----------
   await page.click('.tabs button[data-tab="ask"]');
   await page.fill('#askQ', 'What hinges and drawer slides are specified for the cabinets?');
   await page.click('#askGo');
-  await page.waitForSelector('#askOut .answer h2', { timeout: 20000 });
+  await page.waitForFunction(() => !document.querySelector('#askGo').disabled && document.querySelector('#askOut .answer h2'), null, { timeout: 30000 });
   const ask = await ev(() => ({ cites: document.querySelectorAll('#askOut .cite').length, bad: document.querySelectorAll('#askOut .vbad').length, lead: document.querySelector('#askOut .lead').textContent.slice(0, 120), refs: [...document.querySelectorAll('#askOut .cite .ref[data-rid]')].map(b => b.textContent) }));
-  log('Ask: answer with cited quotes; invented quote flagged', ask.cites >= 3 && ask.bad === 1, JSON.stringify(ask));
+  log('Ask: answer with cited quotes; invented quote flagged', ask.cites >= 3 && ask.bad >= 1, JSON.stringify(ask));
+  const ac = await ev(() => ({ log: state.ask.check, pts: state.ask.points.map(p => `${p.chk ? p.chk.status : 'unchecked'}${p.round ? ' (added r' + p.round + ')' : ''}: ${p.statement.slice(0, 60)}`), shown: (document.querySelector('#askOut .chk-log summary') || {}).textContent }));
+  log('Auto-check (Ask): invented "stainless steel" point flagged for a person', ac.pts.some(p => /^disputed: Hinges must be stainless/.test(p)), ac.pts.join(' | '));
+  log('Auto-check (Ask): second look added the points the answer missed, each confirmed', ac.pts.some(p => /added r1/.test(p)) && ac.pts.filter(p => /added/.test(p)).every(p => /^confirmed/.test(p)), ac.shown);
+  log('Auto-check (Ask): settled', /Settled/.test(ac.log.stopped), `${ac.log.rounds.length} rounds: ${ac.log.stopped}`);
   await shot('03-ask');
 
   // ---------- Compare ----------
@@ -74,11 +84,17 @@ const results = []; const log = (name, ok, detail) => { results.push({ name, ok,
   await page.fill('#pickFilter', '');
   await page.click('#cmpGo');
   await page.waitForFunction(() => /^Finished/.test(document.querySelector('#cmpStatus').textContent) || document.querySelector('#cmpStatus .err'), null, { timeout: 30000 });
-  const cmp = await ev(() => ({ status: document.querySelector('#cmpStatus').textContent, items: state.cmpItems.map(i => `${i.sec} ${i.status}: ${i.topic}`), bad: document.querySelectorAll('#cmpOut .vbad').length }));
+  const cmp = await ev(() => ({ status: document.querySelector('#cmpStatus').textContent, items: state.cmpItems.map(i => `${i.sec} ${i.status}: ${i.topic}`), bad: document.querySelectorAll('#cmpOut .cite .vbad').length, badItems: [...document.querySelectorAll('#cmpOut .cite .vbad')].map(e => e.closest('.ci').querySelector('.ci-topic').textContent + ' :: ' + e.closest('.cite').querySelector('.q').textContent) }));
   const st = s => cmp.items.filter(i => i.includes(s));
   log('Compare: conflicts found (hinge 170 vs 110, slides 100 vs 75)', st('conflict').length >= 2, st('conflict').join(' | '));
   log('Compare: gaps and exclusions found', st('gap').length >= 1 && st('exclusion').length >= 1, [...st('gap'), ...st('exclusion')].join(' | '));
-  log('Compare: all quotes verified against both documents', cmp.bad === 0, `${cmp.bad} unverified; ${cmp.status}`);
+  log('Compare: all quotes verified against both documents', cmp.bad === 0, `${cmp.bad} unverified ${JSON.stringify(cmp.badItems)}; ${cmp.status}`);
+  const cc = await ev(() => ({ log: state.cmpCheck, items: state.cmpItems.map(i => `${i.chk ? i.chk.status : 'unchecked'}${i.round ? ' (added r' + i.round + ')' : ''}: ${i.topic} -> ${i.status}`), shown: (document.querySelector('#cmpOut .chk-log summary') || {}).textContent }));
+  console.log('     compare check:', cc.shown);
+  log('Auto-check (Compare): "match" on warranty re-read as two-year vs One-year and corrected to conflict', cc.items.some(i => /^corrected: Warranty -> conflict/.test(i)), cc.items.filter(i => /Warranty/.test(i)).join(' | '));
+  log('Auto-check (Compare): false gap (edgebanding) found on a fresh search and corrected to match', cc.items.some(i => /^corrected: Edgebanding -> match/.test(i)), cc.items.filter(i => /Edgeband/.test(i)).join(' | '));
+  log('Auto-check (Compare): spec paragraphs the first pass skipped are now reported', cc.items.some(i => /added r1/.test(i)), cc.items.filter(i => /added/.test(i)).slice(0, 6).join(' | '));
+  log('Auto-check (Compare): every finding except "extra" checked; settled within 5 rounds', !cc.items.some(i => /^unchecked/.test(i) && !/-> extra/.test(i)) && /Settled/.test(cc.log.stopped), `${cc.log.rounds.length} rounds: ${cc.log.stopped}; unchecked: ${cc.items.filter(i => /^unchecked/.test(i)).join(', ')}`);
   await page.click('#cmpCsv');
   await page.waitForTimeout(300);
   const saves1 = await ev(() => window.__saves.map(s => s.filename + ' ' + s.size));
@@ -102,9 +118,12 @@ const results = []; const log = (name, ok, detail) => { results.push({ name, ok,
   // ---------- Ask the drawings ----------
   await page.fill('#daQ', 'What backsplash height and countertop material are shown?');
   await page.click('#daGo');
-  await page.waitForSelector('#daOut .answer', { timeout: 30000 });
+  await page.waitForFunction(() => !document.querySelector('#daGo').disabled && document.querySelector('#daOut .answer'), null, { timeout: 60000 });
   const da = await ev(() => ({ srcs: [...document.querySelectorAll('#daOut .cite .q')].map(q => q.textContent + (q.classList.contains('bad') ? ' [FLAGGED]' : '')), lead: document.querySelector('#daOut .lead').textContent }));
-  log('Ask the drawings: answers cite sheet text; invented value flagged', da.srcs.some(s => /BACKSPLASH/.test(s) && !/FLAGGED/.test(s)) && da.srcs.some(s => /42" COUNTER HEIGHT \[FLAGGED\]/.test(s)), JSON.stringify(da));
+  log('Ask the drawings: answers cite sheet text', da.srcs.some(s => /BACKSPLASH/.test(s) && !/FLAGGED/.test(s)), JSON.stringify(da));
+  const dac = await ev(() => ({ log: dAsk.last.check, pts: dAsk.last.points.map(p => `${p.chk ? p.chk.status : 'unchecked'}: ${p.statement}${p.chk && p.chk.was ? ' (was: ' + p.chk.was + ')' : ''}`) }));
+  log('Auto-check (Ask the drawings): invented 42" corrected to the 34 1/2" that is on the sheet', dac.pts.some(p => /^corrected: The counter height shown is 34 1\/2"/.test(p)), dac.pts.join(' | '));
+  log('Auto-check (Ask the drawings): other points confirmed; settled', dac.pts.filter(p => !/counter height/i.test(p)).every(p => /^confirmed/.test(p)) && /Settled/.test(dac.log.stopped), `${dac.log.rounds.length} rounds: ${dac.log.stopped}`);
   const daCall = (await calls()).filter(c => c.kind.startsWith('You are helping')).pop();
   log('Ask the drawings: sheet images sent as JPEG', daCall && daCall.images > 0 && daCall.imgTypes.includes('image/jpeg'), JSON.stringify(daCall));
 
@@ -114,14 +133,18 @@ const results = []; const log = (name, ok, detail) => { results.push({ name, ok,
   const pair = await ev(() => ({ shop: rv.shop, arch: rv.arch, refs: document.querySelector('#rv-refs').textContent.trim(), pairs: pairedSheets().length }));
   log('Drawing review: RE: 3/A-501 auto-pairs M.01 with A-501', !!pair.arch.sid && pair.pairs === 1, JSON.stringify(pair));
   await page.click('#rvGo');
-  await page.waitForFunction(() => state.reviews.length > 0 || document.querySelector('#rvStatus .err'), null, { timeout: 60000 });
+  await page.waitForFunction(() => /^Finished/.test(document.querySelector('#rvStatus').textContent) || document.querySelector('#rvStatus .err'), null, { timeout: 90000 });
   await page.waitForTimeout(300);
   const rvr = await ev(() => { const r = state.reviews[0]; return { items: r.items.map(i => `${i.status}: ${i.shop_text} / ${i.arch_text}${i.possibly_intentional ? ' (possibly intentional)' : ''}`), images: r.images, specCount: r.specCount,
-    flagged: [...document.querySelectorAll('#rvOut .vbad')].map(e => e.closest('.cite').querySelector('.q').textContent), fromImg: [...document.querySelectorAll('#rvOut .cite')].filter(c => /Read from the image/.test(c.textContent)).map(c => c.querySelector('.q').textContent) }; });
+    flagged: [...document.querySelectorAll('#rvOut .cite .vbad')].map(e => e.closest('.cite').querySelector('.q').textContent), fromImg: [...document.querySelectorAll('#rvOut .cite')].filter(c => /Read from the image/.test(c.textContent)).map(c => c.querySelector('.q').textContent) }; });
   log('Drawing review: dimension conflicts found (12\'-0" vs 11\'-11 1/2", 34 1/2" vs 36")', rvr.items.filter(i => i.startsWith('conflict')).length >= 2, rvr.items.join(' | '));
   log('Drawing review: value not on the sheet is flagged red', rvr.flagged.includes('4" WIRE PULL'), 'flagged: ' + JSON.stringify(rvr.flagged));
   log('Drawing review: image-only value labeled', rvr.fromImg.includes('PLYWOOD'), JSON.stringify(rvr.fromImg));
   log('Drawing review: spec passages + images included', rvr.specCount > 0 && rvr.images > 0, `images ${rvr.images}, spec paragraphs ${rvr.specCount}`);
+  const rc = await ev(() => { const r = state.reviews[0]; return { log: r.check, items: r.items.filter(i => i.status !== 'match' || i.round).map(i => `${i.chk ? i.chk.status : 'unchecked'}${i.round ? ' (added r' + i.round + ')' : ''}: ${i.topic}`) }; });
+  log('Auto-check (Drawing review): hallucinated pull flagged after a close-up', rc.items.some(i => /^disputed: Pull type/.test(i)), rc.items.join(' | '));
+  log('Auto-check (Drawing review): a fresh look added the missed countertop callout, then it was checked', rc.items.some(i => /added r1/.test(i) && /Solid surface countertop callout/.test(i) && !/^unchecked/.test(i)), rc.items.filter(i => /added/.test(i)).join());
+  log('Auto-check (Drawing review): settled, no duplicates added', /Settled/.test(rc.log.stopped) && rc.items.filter(i => /added/.test(i)).length === 1, `${rc.log.rounds.length} rounds: ${rc.log.stopped}`);
   await shot('06-review');
 
   // ---------- Deep check ----------
@@ -144,15 +167,26 @@ const results = []; const log = (name, ok, detail) => { results.push({ name, ok,
   console.log('CMP', deep.cmp.join('\n    '), '\nDWG', deep.dwg.join('\n    '), '\nXREF', deep.xrefs);
   const flat = deep.sumPoints.flatMap(x => x[1]);
   log('Deep check: loop ran more than one round and stopped by itself', deep.log.rounds.length > 1 && /settled|full/.test(deep.log.stopped), `${deep.log.rounds.length} rounds; ${deep.log.stopped}`);
-  log('Deep check: found the missed Locks requirement on a later round', flat.some(s => /round [2-9]/.test(s) && /Locks/.test(s)));
+  log('Deep check: the missed Locks requirement is in the summary (added by a later look)', flat.some(s => /\(round \d\)/.test(s) && /Locks/.test(s)));
   log('Deep check: corrected the wrong drawer-slide value (75 -> 100 lbf)', flat.some(s => /^corrected.*Drawer Slides: Full-extension/.test(s)), flat.filter(s => /slide/i.test(s)).join(' | '));
   log('Deep check: hinge point whose quote is NOT in the spec is not silently "corrected"', !flat.some(s => /^corrected.*Hinges/.test(s)), flat.filter(s => /hinge/i.test(s)).join(' | '));
   log('Deep check: false gap (edgebanding) re-searched and corrected to match', deep.cmp.some(s => /corrected: Edgebanding -> match/.test(s)), deep.cmp.join(' | '));
   log('Deep check: hallucinated drawing value disputed on close-up', deep.dwg.some(s => /disputed: Pull type/.test(s)), deep.dwg.join(' | '));
   const dwgCall = deepCalls.find(c => c.kind.startsWith('An earlier comparison of a millwork'));
-  log('Deep check: drawing close-ups sent as images', dwgCall && dwgCall.images > 0, JSON.stringify(dwgCall));
+  log('Deep check after automatic checking: no AI result changes (only the cross-reference adds its finish-tag mismatches)', deep.log.rounds.every(R => !R.changed) && deep.xrefs.length === deep.log.rounds.reduce((n, R) => n + R.newCount, 0), JSON.stringify(deep.log.rounds.map(R => ({ new: R.newCount, changed: R.changed, calls: R.calls }))));
   await shot('07-deep');
   await page.locator('#pane-deep').screenshot({ path: path.join(SHOTS, '07b-deep-pane.png') }).catch(() => {});
+
+  // ---------- Automatic checking can be turned off ----------
+  await page.click('#acOn');
+  await page.click('.tabs button[data-tab="ask"]');
+  let nOff = (await calls()).length;
+  await page.click('#askGo');
+  await page.waitForFunction(() => !document.querySelector('#askGo').disabled && document.querySelector('#askOut .answer h2'), null, { timeout: 30000 });
+  const offCalls = (await calls()).slice(nOff).length, offNote = await page.locator('#askOut .answer').textContent();
+  log('Automatic checking off: one request, no check, and the answer says checking is off', offCalls === 1 && /Automatic checking is off/.test(offNote), `${offCalls} request(s)`);
+  await page.click('.tabs button[data-tab="deep"]'); await page.click('#acOn');
+  log('Automatic checking setting is remembered', await ev(() => JSON.parse(localStorage.getItem('specdesk.autocheck.v1')).on === true), '');
 
   // ---------- Error handling ----------
   await page.click('.tabs button[data-tab="ask"]');

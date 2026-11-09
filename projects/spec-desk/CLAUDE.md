@@ -20,6 +20,7 @@ A single-page tool for Concepts in Millwork (CMI) that reads construction docume
 - **Reading confidence is measured, not self-reported** (`pageQuality`, `sectionConfidence`).
 - **Coverage check:** every PDF page is accounted for (green/yellow/red/grey/white page map).
 - **Deep check loop** (`runDeep`): repeats spec re-read for misses → verify each requirement against its source → re-search proposal for gaps → close-up re-read of drawing findings → non-AI cross-reference. Stops when a round adds/changes nothing or at the round limit. Corrections are only accepted when backed by a quote found in the document; otherwise flagged for a person.
+- **Automatic checking** (`autoCheck`, settings `AC` in the Deep check tab, default on, up to 5 rounds): every AI answer is re-checked as soon as it's made — summaries (`huntSection` + `verifyStatements`), Ask, Compare (`checkComparison`: uncovered paragraphs, both-sides re-read, batched fresh search for gaps), Drawing review (close-ups + a second look with the already-found list), Ask the drawings, room schedule (`checkRoomSheet`), RE: references (read until two readings agree). Rounds stop when one adds and changes nothing. Same rule as Deep check: a correction needs text found in the document, an item is corrected at most once, everything else is `disputed` and goes to Issues.
 - CMI drawing conventions (sheet series M/P/V/S/ST/DR/W/T/SC/L, "RE:" architect references in view titles, item tags like 101.01, hatch legend) are in `CMI_CONVENTIONS`.
 
 ## What must change to run outside claude.ai

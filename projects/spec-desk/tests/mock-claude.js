@@ -19,7 +19,31 @@
   const KEYS = ['hinge', 'slide', 'pull', 'lock', 'shelf', 'warranty', 'edgebanding', 'laminate', 'particleboard', 'mockup', 'certific', 'thickness', 'bracket', 'backsplash', 'grade', 'samples', 'shop drawings', 'seams', 'sealant', 'color'];
   const keyOf = t => KEYS.find(k => t.toLowerCase().includes(k));
 
+  const WORDNUM = t => String(t).toLowerCase().replace(/\bone\b/g, '1').replace(/\btwo\b/g, '2').replace(/\bthree\b/g, '3').replace(/\bten\b/g, '10');
+  window.__rePage = new Map(); window.__reReads = {};
   function answer(prompt, opts) {
+    // ---- Ask: second look for missed points
+    if (prompt.startsWith('You are double-checking an answer to a question')) {
+      const q = (prompt.match(/^Question: (.*)$/m) || [])[1] || '';
+      const have = prompt.split('ANSWER SO FAR:')[1].split('\nPassages:')[0];
+      const miss = passages(prompt, 'R').filter(p => overlap(q, p.text) > 0 && p.text.length > 30 && !have.includes(p.text.slice(0, 30))).slice(0, 2);
+      return { missing: miss.map(p => ({ statement: p.text, citations: [{ ref: p.id, quote: first(p.text, 9) }] })) };
+    }
+    // ---- Compare: read both sides of each finding again
+    if (prompt.startsWith('Each finding below compares a specification requirement')) {
+      const checks = [];
+      for (const blk of prompt.split(/\n\n(?=C\d+: )/).slice(1)) {
+        const id = blk.match(/^(C\d+):/)[1], said = blk.match(/said "(\w+)"/)[1];
+        const lines = blk.split('\n'), spec = lines[1] || '', other = lines[2] || '';
+        const oref = (other.match(/\[(O\d+)\]/) || [])[1];
+        const ofull = other.replace(/^.*?\[O\d+\] [^:]*: /, ''), qword = (blk.match(/^C\d+: said "\w+": (\w+)/) || [])[1] || '';
+        const otext = sentences(ofull).find(x => qword && x.toLowerCase().includes(qword.toLowerCase().slice(0, 6))) || ofull;
+        const sn = new Set((WORDNUM(spec).match(/\d+(?:[.\/]\d+)?/g) || [])), on = (WORDNUM(otext).match(/\d+(?:[.\/]\d+)?/g) || []).filter(n => n.length < 4);
+        const conflict = said === 'match' && on.length && on.some(n => !sn.has(n));
+        checks.push(conflict ? { id, verdict: 'wrong', status: 'conflict', other: { ref: oref, quote: first(otext, 8) }, note: 'Values differ once written-out numbers are read.' } : { id, verdict: 'right', status: said, other: null, note: 'Same on a second reading.' });
+      }
+      return { checks };
+    }
     // ---- section summary: one point per paragraph, but miss "Locks" and get two wrong on purpose
     if (prompt.startsWith('You are summarizing one section')) {
       const points = [];
@@ -49,7 +73,14 @@
       const items = [];
       for (const s of S) {
         if (s.text.length < 30 || /^Section includes/.test(s.text)) continue;
-        const k = keyOf(s.text); if (!k) continue;
+        let k = keyOf(s.text);
+        if (!k && prompt.includes('NOTE: an earlier comparison')) {   // second look at uncovered paragraphs: match on shared words
+          let best = null; for (const o of O) for (const sen of sentences(o.text)) { const sc = overlap(s.text, sen); if (sc >= 2 && (!best || sc > best.sc)) best = { o, sen, sc }; }
+          const topic = s.text.split(':')[0].slice(0, 40);
+          items.push(best ? { topic, status: 'match', spec: { ref: s.id, quote: first(s.text, 10) }, other: { ref: best.o.id, quote: first(best.sen, 10) }, note: 'Found on a second look.' } : { topic, status: 'gap', spec: { ref: s.id, quote: first(s.text, 10) }, other: null, note: 'Not addressed.' });
+          continue;
+        }
+        if (!k) continue;
         let hit = null;
         for (const o of O) for (const sen of sentences(o.text)) if (sen.toLowerCase().includes(k) && !hit) hit = { o, sen };
         const topic = k[0].toUpperCase() + k.slice(1);
@@ -87,13 +118,15 @@
       }
       return { checks };
     }
-    // ---- Deep check pass 3: look again in the other document
-    if (prompt.startsWith('An earlier check said this specification requirement was')) {
-      const req = (prompt.match(/^Requirement \([^)]*\): (.*)$/m) || [])[1] || '';
-      const was = (prompt.match(/requirement was "(\w+)"/) || [])[1];
-      const k = keyOf(req);
-      for (const o of passages(prompt, 'O')) for (const sen of sentences(o.text)) if (k && sen.toLowerCase().includes(k)) return { status: 'match', other: { ref: o.id, quote: first(sen, 10) }, note: 'Found on second look.' };
-      return { status: was, other: null, note: 'Still not found.' };
+    // ---- look again in the other document (several requirements per request)
+    if (prompt.startsWith('An earlier check reported each specification requirement')) {
+      const O = passages(prompt, 'O'), checks = [];
+      for (const m of prompt.matchAll(/^(G\d+): earlier said "(\w+)"\. Requirement \([^)]*\): (.*)$/gm)) {
+        const k = keyOf(m[3]); let hit = null;
+        for (const o of O) for (const sen of sentences(o.text)) if (!hit && k && sen.toLowerCase().includes(k)) hit = { o, sen };
+        checks.push(hit ? { id: m[1], status: 'match', other: { ref: hit.o.id, quote: first(hit.sen, 10) }, note: 'Found on second look.' } : { id: m[1], status: m[2], other: null, note: 'Still not found.' });
+      }
+      return { checks };
     }
     // ---- Drawing review
     if (prompt.startsWith('You are a millwork project reviewer')) {
@@ -114,6 +147,11 @@
         items.push({ category: 'Material', status: 'not_in_arch', topic: 'Scribe strip at wall', shop_text: '1/2" SCRIBE', arch_text: null, shop_box: null, arch_box: null, from_image: true, spec: null, possibly_intentional: true, note: 'Filler at wall.' });
         return { summary: 'Shop sheet read from the image only.', items };
       }
+      const already = prompt.includes('ALREADY FOUND') ? prompt.split('ALREADY FOUND')[1] : null;
+      if (already) {
+        const fresh = [{ category: 'Countertop', status: 'conflict', topic: 'Solid surface countertop callout', shop_text: 'SS-1 SOLID SURFACE', arch_text: 'SS-1 SOLID SURFACE COUNTERTOP', shop_box: null, arch_box: null, from_image: false, spec: null, possibly_intentional: false, note: 'Shop callout leaves out COUNTERTOP.' }];
+        return { summary: 'Second look.', items: [...items.filter(it => !already.includes(it.topic)), ...fresh.filter(it => !already.includes(it.topic))].filter(it => it.status !== 'match') };
+      }
       const R = passages(prompt, 'R').find(p => /Countertop Height/.test(p.text));
       if (R) items.push({ category: 'Spec requirement', status: 'spec_conflict', topic: 'Countertop height vs spec', shop_text: '36"', arch_text: '34 1/2"', shop_box: null, arch_box: null, from_image: false, spec: { ref: R.id, quote: first(R.text, 10) }, possibly_intentional: false, note: 'Spec allows 34 inches max at accessible locations.' });
       items.push({ category: 'Hardware', status: 'missing_in_shop', topic: 'Pull type not shown', shop_text: '4" WIRE PULL', arch_text: null, shop_box: [40, 40, 45, 42], arch_box: null, from_image: false, spec: null, possibly_intentional: false, note: 'Planted: this text is not on the shop sheet.' }); // planted hallucination
@@ -127,6 +165,17 @@
       if (/PLYWOOD/.test(shopVal)) return { verdict: 'cannot_tell', shop_text: null, arch_text: null, note: 'Hatch too small.' };
       return { verdict: 'confirmed', shop_text: shopVal, arch_text: null, note: 'Values read the same close up.' };
     }
+    // ---- Ask the drawings: second look
+    if (prompt.startsWith('You are helping a millwork company') && prompt.includes('This is a second look')) {
+      const sheetLines = prompt.split(/\n(?=SHEET P\d+:)/).slice(1).join('\n');
+      const checks = [];
+      for (const m of prompt.matchAll(/^(A\d+): (.*)\n  sources: (.*)$/gm)) {
+        const txt = (m[3].match(/"([^"]*(?:"[^"]*)?)"/) || [])[1] || '';
+        if (/42" COUNTER HEIGHT/.test(m[3])) { const l = sheetLines.match(/^\((\d+),(\d+)\) (34 1\/2")$/m); checks.push(l ? { id: m[1], verdict: 'partly', statement: 'The counter height shown is 34 1/2".', sources: [{ ref: 'P1', text: l[3], box: null, from_image: false }], note: '42" is not on the sheet.' } : { id: m[1], verdict: 'not_supported', statement: '', sources: [], note: 'Not on the sheets.' }); }
+        else checks.push({ id: m[1], verdict: 'supported', statement: '', sources: [], note: 'Shown on the sheet.' });
+      }
+      return { checks, missing: [] };
+    }
     // ---- Ask the drawings
     if (prompt.startsWith('You are helping a millwork company')) {
       const q = (prompt.match(/^Question: (.*)$/m) || [])[1] || '';
@@ -137,6 +186,21 @@
       }
       pts.push({ statement: 'Planted: invented value.', sources: [{ ref: 'P1', text: '42" COUNTER HEIGHT', box: null, from_image: false }] });
       return { answer: `Found ${pts.length - 1} matching notes.`, points: pts.slice(0, 6), not_found: '' };
+    }
+    // ---- Room schedule: second look
+    if (prompt.startsWith('You are a millwork drafter') && prompt.includes('This is a second look')) {
+      const textless = !/\n\(\d+,\d+\) [^\n]*\n\(\d+,\d+\)/.test(prompt.split(/\nSHEET TEXT[^\n]*\n/)[1] || '');
+      const all = prompt.split('ALL ROWS FROM THIS SHEET')[1] || '';
+      const checks = [];
+      for (const m of prompt.matchAll(/^(W\d+): (.*)$/gm)) {
+        const row = m[2];
+        if (/Tall storage/.test(row)) checks.push({ id: m[1], verdict: 'not_on_sheet', fix: {}, evidence: [], note: 'No tall storage cabinet on this sheet.' });
+        else if (/width: 12'-0"/.test(row) && /item: 201\.01/.test(row)) checks.push({ id: m[1], verdict: 'wrong', fix: { width: '11\'-11 1/2"' }, evidence: ['11\'-11 1/2"'], note: 'Width misread.' });
+        else if (textless && /item: 201\.01/.test(row)) checks.push({ id: m[1], verdict: 'wrong', fix: { depth: '23 1/4"' }, evidence: [], note: 'Depth looks like 23 1/4" in the picture.' });
+        else checks.push({ id: m[1], verdict: 'right', fix: {}, evidence: [], note: '' });
+      }
+      const rooms = /item: 201\.0[12]/.test(all) && !/Scribe filler/.test(all) && !textless ? [{ room: '201', room_name: 'BREAK ROOM', items: [{ item: '', product: 'Scribe filler', qty: '1', width: '1/2"', height: '', depth: '', material: '', finish: '', countertop: '', counter_height: '', backsplash_height: '', hardware: '', special_conditions: '', evidence: ['1/2" SCRIBE'], box: null }] }] : [];
+      return { checks, rooms };
     }
     // ---- Room schedule: read one sheet
     if (prompt.startsWith('You are a millwork drafter')) {
@@ -150,7 +214,7 @@
       const room = find(/BREAK ROOM (\d{3})/), tags = L.filter(x => /^\d{3}\.\d{2}$/.test(x));
       const items = [];
       if (tags.length) {   // shop drawing
-        items.push({ item: tags[0], product: 'Base cabinet run', qty: '1', width: find(/^(\d+'-[\d \/]+")$/), height: '36"', depth: find(/BASE CAB(?:INET)? DEPTH (.*)$/), material: '', finish: find(/^(PL-\d)/), countertop: find(/^(SS-\d)/), counter_height: '36"', backsplash_height: find(/^(\d+") BACKSPLASH/), hardware: '', special_conditions: find(/(\d\/\d" SCRIBE)/), evidence: [find(/(BASE CAB(?:INET)? DEPTH .*)$/), tags[0]], box: [28, 54, 36, 58] });
+        items.push({ item: tags[0], product: 'Base cabinet run', qty: '1', width: '12\'-0"', height: '36"', depth: find(/BASE CAB(?:INET)? DEPTH (.*)$/), material: '', finish: find(/^(PL-\d)/), countertop: find(/^(SS-\d)/), counter_height: '36"', backsplash_height: find(/^(\d+") BACKSPLASH/), hardware: '', special_conditions: find(/(\d\/\d" SCRIBE)/), evidence: [find(/(BASE CAB(?:INET)? DEPTH .*)$/), tags[0]], box: [28, 54, 36, 58] });
         if (tags[1]) items.push({ item: tags[1], product: 'Wall cabinets', qty: '1', width: '', height: '', depth: find(/WALL CAB(?:INET)? DEPTH (.*)$/), material: '', finish: find(/^(PL-\d)/), countertop: '', counter_height: '', backsplash_height: '', hardware: '', special_conditions: '', evidence: [tags[1]], box: [48, 54, 56, 58] });
       } else {             // architect's sheet: no CMI item tags
         items.push({ item: '', product: 'Base cabinets with solid surface top', qty: '1', width: find(/^(\d+'-[\d \/]+")$/), height: '', depth: find(/BASE CABINET DEPTH (.*)$/), material: '', finish: 'PL-1', countertop: 'SS-1', counter_height: '34 1/2"', backsplash_height: '4"', hardware: '', special_conditions: 'See 5/A-502 for countertop support', evidence: ['BASE CABINET DEPTH 24"', '34 1/2"'], box: [20, 40, 50, 70] });
@@ -160,8 +224,11 @@
     }
     // ---- RE: references read from a CAD plot picture (pages are read in order)
     if (prompt.includes('Reply with only JSON: {"sheet"')) {
-      window.__reCount = (window.__reCount || 0) + 1;
-      return window.__reCount % 2 === 1 ? { sheet: 'M.02', refs: ['3/A-501', '4/A-501', 'RE: -'] } : { sheet: 'M.03', refs: ['C4/A-458'] };
+      const key = (opts.images || [])[0] ? opts.images[0].size : 0;
+      if (!window.__rePage.has(key)) window.__rePage.set(key, window.__rePage.size);
+      const pg = window.__rePage.get(key), k = window.__reReads[pg] = (window.__reReads[pg] || 0) + 1;
+      if (pg === 0) return { sheet: 'M.02', refs: k === 2 ? ['3/A-501', '4/A-501', 'C9/A-777'] : ['3/A-501', '4/A-501', 'RE: -'] };
+      return { sheet: 'M.03', refs: ['C4/A-458'] };
     }
     // ---- Score a drawing review against human redlines
     if (prompt.startsWith('A millwork shop drawing was reviewed twice')) {

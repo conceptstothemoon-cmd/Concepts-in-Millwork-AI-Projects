@@ -42,7 +42,10 @@ const XLSX = require('xlsx');
   const reCalls = (await calls()).slice(n0);
   const after = await ev(() => ({ status: document.querySelector('#rvStatus').textContent, reRefs: state.reRefs, pairs: pairedSheets().map(p => `${pageLabel(findSet(p.shop.sid), p.shop.n)} -> ${pageLabel(findSet(p.arch.sid), p.arch.n)}`),
     missing: state.dwg.issues.filter(i => /missing sheet/.test(i.type)).map(i => i.title), sheets: state.dwg.sets[2].pages.map(p => p.sheet.disp + (p.sheet.fromClaude ? ' (read by Claude)' : '')) }));
-  log('RE: each sheet sent as 5 JPEG images (whole + quarters), quick model', reCalls.length === 2 && reCalls.every(c => c.images === 5 && c.tier === 'quick' && c.imgTypes.join() === 'image/jpeg'), JSON.stringify(reCalls.map(c => ({ images: c.images, tier: c.tier, kb: Math.round(c.imgBytes / 1024) }))));
+  log('RE: each reading sends 5 JPEG images (whole + quarters) to the quick model', reCalls.every(c => c.images === 5 && c.tier === 'quick' && c.imgTypes.join() === 'image/jpeg'), JSON.stringify(reCalls.map(c => ({ images: c.images, tier: c.tier, kb: Math.round(c.imgBytes / 1024) }))));
+  const reChk = await ev(() => state.reRefsChk);
+  log('Auto-check (RE:): sheets read again until two readings agree (M.02: 4 readings, M.03: 2)', reCalls.length === 6 && JSON.stringify(Object.values(reChk).map(x => x.reads)) === '[4,2]', JSON.stringify(reChk));
+  log('Auto-check (RE:): a reference seen in only one reading (C9/A-777) is marked uncertain', JSON.stringify(Object.values(reChk).map(x => x.uncertain)) === '[["C9/A-777"],[]]', '');
   log('RE: references read from picture pair M.02 with A-501', after.pairs.some(p => /^M\.02.*A-501/.test(p)), after.pairs.join(' | '));
   log('RE: "RE: -" ignored and reference to unloaded A-458 reported', !JSON.stringify(after.reRefs).includes('RE: -') && after.missing.some(t => /A-?458/.test(t)), after.missing.join(' | '));
 
@@ -85,7 +88,13 @@ const XLSX = require('xlsx');
     rows: state.rs.rows.map(r => `${r.f.room} ${r.f.item || r.f.desc} d=${r.f.depth} [${r.src.label}]${r.conf ? ' CONFLICT:' + [...r.conf].join(',') : ''}`),
     redCells: document.querySelectorAll('#rsTable td.rs-conf').length, checkFlags: [...document.querySelectorAll('#rsTable .vbad')].map(e => e.closest('tr').querySelector('[data-f="desc"]').value),
     issues: rsIssues().map(i => i.title + ': ' + i.detail) }));
-  log('Room schedule: rows read from all 4 sheets (6 items), grouped by room', rs.rows.length === 6, rs.rows.join(' | '));
+  log('Room schedule: rows read from all 4 sheets, grouped by room (6 + 1 found by the check)', rs.rows.length === 7, rs.rows.join(' | '));
+  const rck = await ev(() => ({ rows: state.rs.rows.map(r => `${r.chk ? r.chk.status : 'unchecked'}${r.round ? ' (added r' + r.round + ')' : ''}: ${r.f.item || r.f.desc} w=${r.f.width} d=${r.f.depth} [${r.src.label}]${r.chk && r.chk.status !== 'confirmed' ? ' — ' + (r.chk.was ? 'was ' + r.chk.was + '; ' : '') + r.chk.note : ''}`), status: document.querySelector('#rsStatus').textContent, issues: rsIssues().filter(i => i.type === 'Row not confirmed').map(i => i.title) }));
+  console.log('     ' + rck.rows.join('\n     '));
+  log('Auto-check (rooms): misread width 12\'-0" corrected to 11\'-11 1/2", which is in the sheet text', rck.rows.some(r => /^corrected: 201\.01 w=11'-11 1\/2"/.test(r)), rck.rows.filter(r => /201\.01/.test(r)).join(' | '));
+  log('Auto-check (rooms): item not on the sheet ("Tall storage") flagged, kept for a person', rck.rows.some(r => /^disputed: Tall storage/.test(r)) && rck.issues.some(t => /Tall storage/.test(t)), rck.issues.join(' | '));
+  log('Auto-check (rooms): on the CAD plot without text, a suggested correction goes to a person', rck.rows.some(r => /^disputed: 201\.01 w=11'-11 1\/2" d=24" \[M\.02/.test(r) && /no text to confirm/.test(r)), '');
+  log('Auto-check (rooms): missed "Scribe filler" added by the second look and then confirmed', rck.rows.some(r => /^confirmed \(added r1\): Scribe filler/.test(r)), rck.status);
   log('Room schedule: M.01 (23 1/4") vs M.02 (24") depth disagreement turns red', rs.redCells >= 2 && rs.issues.some(t => /201\.01: depth differs/.test(t)), rs.issues.join(' | '));
   log('Room schedule: row whose evidence is not on the sheet gets "check"', rs.checkFlags.length === 1 && /Tall storage/.test(rs.checkFlags[0]), JSON.stringify(rs.checkFlags));
   await page.click('#rsTable [data-rsver]');
