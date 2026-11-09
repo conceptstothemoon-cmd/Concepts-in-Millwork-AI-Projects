@@ -63,12 +63,15 @@ async function makeRedlines(browser) {
 // ---------- estimate workbook (Laredo layout: "Project Spreadsheet" tab, header on row 13) ----------
 function makeEstimate() {
   const aoa = [['LAREDO TEST PROJECT'], ['ESTIMATE 24-117'], ['Prepared by CMI estimating'], [], ['Bid date', '11/1/2026'], [], [], [], [], [], [], [],
-    ['ROOM', 'ITEM TO BE PRICED', 'DESCRIPTION', 'QTY', 'LENGTH', 'HEIGHT', 'DEPTH', 'FINISH ID', 'ARCH ELEV', 'COMMENTS'],
-    ['201', '201.01', 'Base cabinet run with SS top', '1', '11\'-11 1/2"', '34 1/2"', '24"', 'PL-1', '3/A-501', 'Scribe at wall'],
-    ['201', '201.02', 'Wall cabinets', '1', '8\'-0"', '30"', '12"', 'PL-1', '3/A-501', ''],
-    ['105', '105.01', 'Reception counter', '1', '10\'-0"', '42"', '30"', 'QZ-1', 'C4/A-458', ''],
-    ['110', '110.01', 'Workroom base cabinets', '2', '6\'-0"', '34 1/2"', '24"', 'PL-2', '', 'Not on any sheet read'],
-    ['', '', 'Freight', '0', '0', '0', '0', '', '', ''],
+    ['ROOM', 'ITEM TO BE PRICED', 'DESCRIPTION', 'QTY', 'LENGTH', 'HEIGHT', 'DEPTH', 'FINISH ID', 'ARCH ELEV', 'COMMENTS', 'PRICE'],
+    ['201', '201.01', 'Base cabinet run with SS top', '1', '11\'-11 1/2"', '34 1/2"', '24"', 'PL-1', '3/A-501', 'Scribe at wall', '$6,400'],
+    ['201', '201.02', 'Wall cabinets', '1', '8\'-0"', '30"', '12"', 'PL-1', '3/A-501', '', '$2,900'],
+    ['201', '201.03', 'Owner-furnished shelf standards, install only', '4', '0', '0', '0', '', '', 'No charge', '$0'],
+    ['105', '105.01', 'Reception counter', '1', '10\'-0"', '42"', '30"', 'QZ-1', 'C4/A-458', '', '$9,800'],
+    ['105', '105.02', 'Delivery drawer pedestal', '1', '15"', '28"', '24"', 'PL-1', '', '', '$700'],
+    ['110', '110.01', 'Workroom base cabinets', '2', '6\'-0"', '34 1/2"', '24"', 'PL-2', '', 'Not on any sheet read', '$4,100'],
+    ['', '', 'Freight', '0', '0', '0', '0', '', '', '', '$0'],
+    ['', '', 'Sales tax 8.25%', '1', '', '', '', '', '', '', '$1,980'],
     ['', '', 'TOTAL', '', '', '', '', '', '', '']];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Summary'], ['Total', '$48,200']]), 'Summary');

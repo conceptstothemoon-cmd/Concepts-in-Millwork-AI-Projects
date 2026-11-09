@@ -2943,7 +2943,7 @@ function mvConvert(v, isDim) {
   const x = parseDimInches(v); if (x == null) return v;
   return state.mv.units === 'mm' ? String(Math.round(x * 25.4 * 10) / 10) : String(Math.round(x * 1000) / 1000);
 }
-const MV_SYN = { room: ['room', 'room #', 'room number', 'location', 'area', 'room # s or name'], roomName: ['room name', 'location name'], item: ['item', 'tag', 'mark', 'item #', 'item number'], desc: ['product', 'product name', 'description', 'name', 'cabinet', 'item name', 'item to be priced'],
+const MV_SYN = { room: ['room', 'room #', 'room number', 'location', 'area', 'room # s or name'], roomName: ['room name', 'location name'], item: ['item', 'tag', 'mark', 'item #', 'item number', 'item tag', 'item to be priced'], desc: ['product', 'product name', 'description', 'name', 'cabinet', 'item name'],
   qty: ['qty', 'quantity', 'count'], width: ['width', 'w', 'length'], height: ['height', 'h'], depth: ['depth', 'd'], material: ['material', 'core', 'material name'], finish: ['finish', 'color', 'colour'],
   ctop: ['countertop', 'top', 'counter'], ctopHt: ['counter height', 'countertop height'], bsHt: ['backsplash height', 'splash height'], hardware: ['hardware'], notes: ['comments', 'comment', 'notes', 'note', 'special conditions'] };
 const nk = s => String(s || '').toLowerCase().replace(/[^a-z0-9#]+/g, ' ').trim();
@@ -2964,8 +2964,25 @@ function mvAutoMap() {
   }
   state.mv.map = map;
 }
+// Estimate columns. "ITEM TO BE PRICED" is the item identifier (201.01); the product name is in DESCRIPTION.
+function estCols(est) {
+  const H = est.headers.map(nk);
+  const find = (...pats) => H.findIndex(h => pats.some(p => p.test(h)));
+  return { room: find(/room/), item: find(/item to be priced|^item\b|product code|item code|^product$/), desc: find(/description|item name/), qty: find(/^qty|quantity/),
+    width: find(/^length|length$|^width|width$/), height: find(/^height|height$/), depth: find(/^depth|depth$/), finish: find(/finish id|^finish$|finish/), notes: find(/comment|modification|^notes?$/),
+    elev: find(/arch elev|^elev/), plan: find(/arch plan|^plan/), detail: find(/arch detail|^detail/) };
+}
+// Charges that aren't products (freight, tax, bonds…). A line is skipped only when it names one of these AND has no
+// item identifier. A $0 value is never a reason to skip: real products can be priced at $0.
+const NON_PRODUCT = /^(?:freight|shipping|delivery|crating|fuel surcharge|mobili[sz]ation|demobili[sz]ation|(?:performance |payment )?bonds?|permits?|(?:sales )?tax(?:es)?|insurance|overhead|profit|mark-?up|contingency|discount|escalation|general conditions|travel|per diem|lodging|sub-?total|grand total|total)\b/i;
+function estNonProduct(r, col) {
+  const cell = k => (col[k] >= 0 ? String(r[col[k]] ?? '').trim() : '');
+  if (cell('item') && !/^-?0(\.0+)?$|^\?$/.test(cell('item'))) return false;
+  const name = cell('desc') || r.map(c => String(c ?? '').trim()).find(c => /[a-z]{3}/i.test(c)) || '';
+  return NON_PRODUCT.test(name);
+}
 function mvSourceRows() {
-  if (state.mv.source === 'estimate') return state.mv.estimate ? state.mv.estimate.rows : [];
+  if (state.mv.source === 'estimate') { const est = state.mv.estimate; if (!est) return []; const col = estCols(est); return est.rows.filter(r => !estNonProduct(r, col)); }
   return [...state.rs.rows].sort((a, b) => a.f.room.localeCompare(b.f.room, undefined, { numeric: true }));
 }
 function mvOutput() {
@@ -3031,17 +3048,14 @@ async function readTable(file, layoutOnly) {
 }
 function estimateToSchedule() {
   const est = state.mv.estimate; if (!est) return 0;
-  const H = est.headers.map(nk);
-  const find = (...pats) => H.findIndex(h => pats.some(p => p.test(h)));
-  const col = { room: find(/room/), item: find(/item to be priced|^item\b|product code|item code|^product$/), desc: find(/description|item name/), qty: find(/^qty|quantity/),
-    width: find(/^length|length$|^width|width$/), height: find(/^height|height$/), depth: find(/^depth|depth$/), finish: find(/finish id|^finish$|finish/), notes: find(/comment|modification|^notes?$/),
-    elev: find(/arch elev|^elev/), plan: find(/arch plan|^plan/), detail: find(/arch detail|^detail/) };
+  const col = estCols(est);
   const v = (r, k) => { const x = col[k] >= 0 ? String(r[col[k]] ?? '').trim() : ''; return /^-?0(\.0+)?\s*(\/\s*[a-z]+)?$/i.test(x) || x === '?' ? '' : x; };
   state.rs.rows = state.rs.rows.filter(r => !(r.origin === 'estimate' && !r.edited && !r.verified));
-  let n = 0;
+  let n = 0; est.skipped = [];
   est.rows.forEach((r, i) => {
     const item = v(r, 'item'), room = v(r, 'room');
     if (!item && !v(r, 'desc')) return;
+    if (estNonProduct(r, col)) { est.skipped.push(v(r, 'desc') || 'row ' + (est.rowNums ? est.rowNums[i] : i + 1)); return; }
     const notes = [v(r, 'notes'), v(r, 'elev') && 'Arch elev ' + v(r, 'elev'), v(r, 'detail') && 'Arch detail ' + v(r, 'detail'), v(r, 'plan') && 'Plan ' + v(r, 'plan')].filter(Boolean).join('; ');
     state.rs.rows.push({ id: 'r' + Math.random().toString(36).slice(2, 9), origin: 'estimate', edited: false, verified: false, src: null, est: `Estimate, ${est.sheet} row ${est.rowNums ? est.rowNums[i] : i + 1}`,
       f: { room, roomName: '', item, desc: v(r, 'desc'), qty: v(r, 'qty'), width: v(r, 'width'), height: v(r, 'height'), depth: v(r, 'depth'), material: '', finish: v(r, 'finish'), ctop: '', ctopHt: '', bsHt: '', hardware: '', notes } });
@@ -3063,7 +3077,7 @@ ${state.mv.layout.headers.map(h => '- ' + h).join('\n')}
 
 ${src}
 
-Reply with only JSON: {"map":{"<Microvellum column>": ${state.mv.source === 'estimate' ? '<column index number or null>' : '"<field id or null>"'}}}`, { modelTier: 'quick' });
+${state.mv.source === 'estimate' ? 'In these estimates, "ITEM TO BE PRICED" is the item identifier (such as 201.01), not the product name; the product name is in the description column.\n\n' : ''}Reply with only JSON: {"map":{"<Microvellum column>": ${state.mv.source === 'estimate' ? '<column index number or null>' : '"<field id or null>"'}}}`, { modelTier: 'quick' });
     for (const h of state.mv.layout.headers) {
       const v = res && res.map ? res.map[h] : null;
       if (v == null || v === '') continue;
@@ -3102,7 +3116,7 @@ function drawMv() {
       <div class="row"><label><input type="radio" name="mvsrc" value="schedule" ${mv.source !== 'estimate' ? 'checked' : ''}> Room schedule above (${plural(state.rs.rows.length, 'row')})</label>
         <label><input type="radio" name="mvsrc" value="estimate" ${mv.source === 'estimate' ? 'checked' : ''}> Estimate export from Energy</label>
         <label class="btn ghost small" for="mvEstFile">Open estimate (Excel or CSV)</label><input type="file" id="mvEstFile" accept=".xlsx,.xls,.csv,.txt" hidden></div>
-      ${mv.estimate ? `<p class="note">Estimate: ${esc(mv.estimate.name)}, tab “${esc(mv.estimate.sheet || '')}”, ${plural(mv.estimate.rows.length, 'line')}, ${plural(mv.estimate.headers.length, 'column')}. Headers read from row ${mv.estimate.headerRow || 1}.</p>
+      ${mv.estimate ? `<p class="note">Estimate: ${esc(mv.estimate.name)}, tab “${esc(mv.estimate.sheet || '')}”, ${plural(mv.estimate.rows.length, 'line')}, ${plural(mv.estimate.headers.length, 'column')}. Headers read from row ${mv.estimate.headerRow || 1}.${(() => { const col = estCols(mv.estimate), sk = mv.estimate.rows.filter(r => estNonProduct(r, col)); return sk.length ? ` Left out ${plural(sk.length, 'non-product line')} with no item number: ${esc(sk.map(r => String(r[col.desc] ?? '').trim() || '?').join(', '))}.` : ''; })()}</p>
         ${mv.estimate.sheets ? `<div class="row"><label>Tab <select id="mvEstSheet" ${mvWb ? '' : 'disabled'}>${mv.estimate.sheets.map(n => `<option ${n === mv.estimate.sheet ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></label>
           <label>Header row <input id="mvEstHdr" type="number" min="1" value="${mv.estimate.headerRow || 1}" style="width:5rem" ${mvWb ? '' : 'disabled'}></label>${mvWb ? '' : '<span class="note">Open the file again to switch tabs.</span>'}</div>` : ''}` : ''}
     </div>
@@ -3200,11 +3214,11 @@ function renderRooms() {
     $('#rsXlsx').onclick = () => saveFile(projBase() + ' - room schedule.xlsx', xlsxBlob([['Room schedule', rsAoa()]]));
     $('#rsEstFile').onchange = async e => {
       const f = e.target.files[0]; e.target.value = ''; if (!f) return;
-      try { state.mv.estimate = await readTable(f); mvAutoMap(); const n = estimateToSchedule(); $('#rsStatus').textContent = `Added ${plural(n, 'line')} from ${f.name}, tab “${state.mv.estimate.sheet}”. To use a different tab or header row, change it under Send to Microvellum, then click “Reload lines from the open estimate”.`; }
+      try { state.mv.estimate = await readTable(f); mvAutoMap(); const n = estimateToSchedule(); $('#rsStatus').textContent = `Added ${plural(n, 'line')} from ${f.name}, tab “${state.mv.estimate.sheet}”.${state.mv.estimate.skipped && state.mv.estimate.skipped.length ? ` Skipped ${plural(state.mv.estimate.skipped.length, 'non-product line')} (${esc(state.mv.estimate.skipped.join(', '))}).` : ''} To use a different tab or header row, change it under Send to Microvellum, then click “Reload lines from the open estimate”.`; }
       catch (err) { $('#rsStatus').innerHTML = `<span class="err">That file couldn’t be read: ${esc(err.message)}</span>`; }
       drawRsTable(); drawMv(); updateIssueCount(); scheduleWorkSave(); $('#rsFromEst').hidden = !state.mv.estimate;
     };
-    $('#rsFromEst').onclick = () => { const n = estimateToSchedule(); $('#rsStatus').textContent = `Reloaded ${plural(n, 'line')} from the estimate. Rows you edited or verified were kept.`; drawRsTable(); updateIssueCount(); scheduleWorkSave(); };
+    $('#rsFromEst').onclick = () => { const n = estimateToSchedule(); $('#rsStatus').textContent = `Reloaded ${plural(n, 'line')} from the estimate.${state.mv.estimate.skipped && state.mv.estimate.skipped.length ? ` Skipped ${plural(state.mv.estimate.skipped.length, 'non-product line')} (${esc(state.mv.estimate.skipped.join(', '))}).` : ''} Rows you edited or verified were kept.`; drawRsTable(); updateIssueCount(); scheduleWorkSave(); };
     $('#rsCsv').onclick = () => saveFile(projBase() + ' - room schedule.csv', rsAoa().map(r => r.map(csvCell).join(',')).join('\r\n'));
     $('#rsTable').addEventListener('change', e => {
       const t = e.target;
