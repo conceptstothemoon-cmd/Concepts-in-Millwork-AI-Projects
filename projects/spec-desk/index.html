@@ -3906,8 +3906,9 @@ ${blocks}`, { signal, modelTier: 'default' });
       const prev = x.p.chk, n = (prev ? prev.n : 0) + 1;
       const quotesOk = (x.p.citations || []).length && x.p.citations.every(q => { const r = specResolver(q.ref); return r && verifyQuote(q.quote, r.text); });
       if (c.verdict === 'supported' && quotesOk) { x.p.chk = { status: 'confirmed', n, note: c.note || '' }; confirmed++; }
-      else if (c.verdict === 'partly' && c.fix) { x.p.chk = { status: 'corrected', n, was: x.p.statement, note: c.note || '' }; x.p.statement = c.fix; changed++; }
-      else { x.p.chk = { status: 'disputed', n, note: (c.note || '') + (quotesOk ? '' : ' The quoted words weren’t found in the spec.') }; if (!prev || prev.status !== 'disputed') changed++; }
+      // a correction is only taken when the statement's own quotes are really in the spec; otherwise a person decides
+      else if (c.verdict === 'partly' && c.fix && quotesOk) { x.p.chk = { status: 'corrected', n, was: x.p.statement, note: c.note || '' }; x.p.statement = c.fix; changed++; }
+      else { x.p.chk = { status: 'disputed', n, note: (c.note || '') + (quotesOk ? '' : ' The quoted words weren’t found in the spec.') + (c.verdict === 'partly' && c.fix ? ` Suggested correction: ${c.fix}` : '') }; if (!prev || prev.status !== 'disputed') changed++; }
     }
   }
   return { changed, confirmed, calls, checked: todo.length };
