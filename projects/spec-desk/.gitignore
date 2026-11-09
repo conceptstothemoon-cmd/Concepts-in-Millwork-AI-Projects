@@ -1,3 +1,9 @@
 node_modules/
+tests/node_modules
 tests/shots/
-tests/results.json
+tests/*.log
+tests/results*.json
+tests/tmp.json
+# large fixtures: regenerate with `node make-fixtures2.js big`
+tests/fixtures/arch-512-sheets.pdf
+tests/fixtures/spec-900.pdf

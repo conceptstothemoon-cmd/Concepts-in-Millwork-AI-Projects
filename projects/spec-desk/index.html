@@ -1594,7 +1594,7 @@ function analyzeDrawings() {
         if (t.hits.length < 400) t.hits.push({ set, pg, ci });
       }
     });
-    for (const r of (state.reRefs || {})[set.id + ':' + pg.n] || []) { const m = String(r).match(/(?:(\d{1,2}|[A-Z]\d?)\s*\/\s*)?([A-Z]{1,3})[-.]?(\d{1,3}(?:\.\d{1,3})?[A-Za-z]?)/i); if (m) found.push({ set, pg, ci: null, key: (m[2] + m[3]).toUpperCase(), disp: m[2].toUpperCase() + m[3], detail: m[1] || null, fromClaude: true }); }
+    for (const r of (state.reRefs || {})[set.id + ':' + pg.n] || []) { const m = String(r).match(/(?:(\d{1,2}|[A-Z]\d?)\s*\/\s*)?([A-Z]{1,3})[-.]?(\d{1,3}(?:\.\d{1,3})?[A-Za-z]?)/i); if (m) found.push({ set, pg, ci: null, key: (m[2] + m[3]).toUpperCase(), disp: m[0].replace(/^(?:\d{1,2}|[A-Z]\d?)\s*\/\s*/i, '').toUpperCase(), detail: m[1] || null, fromClaude: true }); }
     pg.autoIndex = pg.n <= 4 && ids.size >= 10;
     const isIndex = pg.indexOverride != null ? pg.indexOverride : pg.autoIndex;
     pg.isIndex = isIndex; pg.listed = isIndex ? ids : null;
@@ -1638,10 +1638,10 @@ function analyzeDrawings() {
       const notThere = [...listed.keys()].filter(k => !sheets.has(k));
       const notListed = [...inSet.keys()].filter(k => !listed.has(k));
       if (notThere.length) issues.push({ key: 'dwg:idxmiss:' + set.name + ':' + notThere.join(','), type: 'Sheet index mismatch', sev: 1,
-        title: `${set.name}: the sheet index lists ${plural(notThere.length, 'sheet')} that aren’t in the PDF`, detail: notThere.map(k => listed.get(k)).join(', '),
+        title: `${set.name}: the sheet index lists ${plural(notThere.length, 'sheet')} that ${notThere.length === 1 ? 'isn’t' : 'aren’t'} in the PDF`, detail: notThere.map(k => listed.get(k)).join(', '),
         occ: idx.map(p => ({ sid: set.id, n: p.n, ci: null, label: `Sheet index, PDF p. ${p.n}` })) });
       if (notListed.length) issues.push({ key: 'dwg:idxextra:' + set.name + ':' + notListed.join(','), type: 'Sheet index mismatch', sev: 2,
-        title: `${set.name}: ${plural(notListed.length, 'sheet')} in the PDF aren’t on the sheet index`, detail: notListed.map(k => inSet.get(k).sheet.disp).join(', '),
+        title: `${set.name}: ${plural(notListed.length, 'sheet')} in the PDF ${notListed.length === 1 ? 'isn’t' : 'aren’t'} on the sheet index`, detail: notListed.map(k => inSet.get(k).sheet.disp).join(', '),
         occ: notListed.slice(0, 40).map(k => { const p = inSet.get(k); return { sid: set.id, n: p.n, ci: p.sheet.ci, label: `${p.sheet.disp} (PDF p. ${p.n})` }; }) });
     }
     const stampOnly = set.pages.filter(p => p.sheet && p.sheet.fromStamp).length;
@@ -2332,7 +2332,7 @@ function archRefsOn(set, n, region) {
     const m = String(r).match(/(?:(\d{1,2}|[A-Z]\d?)\s*\/\s*)?([A-Z]{1,3})[-.]?(\d{1,3}(?:\.\d{1,3})?[A-Za-z]?(?:\.\d{1,2})?)/i); if (!m) continue;
     const key = (m[2] + m[3]).toUpperCase(); if (seen.has(key)) continue; seen.add(key);
     const hits = (state.dwg.sheets.get(key) || []).filter(h => h.set.id !== set.id);
-    out.push({ key, disp: m[2].toUpperCase() + m[3], detail: m[1] || null, target: hits[0] || null, fromClaude: true });
+    out.push({ key, disp: m[0].replace(/^(?:\d{1,2}|[A-Z]\d?)\s*\/\s*/i, '').toUpperCase(), detail: m[1] || null, target: hits[0] || null, fromClaude: true });
   }
   return out;
 }
@@ -2974,7 +2974,7 @@ function mvOutput() {
     const m = state.mv.map[h] || { type: 'blank' };
     if (m.type === 'fixed') return m.v || '';
     if (m.type === 'field' && r.f) return mvConvert(r.f[m.v] || '', RS_DIMS.has(m.v));
-    if (m.type === 'col' && Array.isArray(r)) { let v = String(r[m.v] ?? '').trim(); if (/^-?0(\.0+)?\s*(\/\s*[a-z]+)?$/i.test(v)) v = ''; return mvConvert(String(v), /width|height|depth|^w$|^h$|^d$/i.test(state.mv.estimate.headers[m.v] || '')); }
+    if (m.type === 'col' && Array.isArray(r)) { let v = String(r[m.v] ?? '').trim(); if (/^-?0(\.0+)?\s*(\/\s*[a-z]+)?$/i.test(v)) v = ''; return mvConvert(String(v), /width|length|height|depth|^w$|^l$|^h$|^d$/i.test(state.mv.estimate.headers[m.v] || '')); }
     return '';
   })));
 }
@@ -2994,7 +2994,8 @@ function parseSheet(wb, name, hi) {
   let end = hi;
   while (end + 1 < aoa.length && end - hi < 3) {
     const r = aoa[end + 1].map(c => String(c).trim()).filter(Boolean);
-    if (!r.length || r.filter(c => /^-?[\d.,$%]+$/.test(c)).length > r.length * 0.3) break;
+    // a second header row holds only words ("ARCH" over "ELEV"); any number or dimension (1, 201.01, 11'-11 1/2") means data has started
+    if (!r.length || r.some(c => /^-?[\d.,$%]+$/.test(c) || /^\d+\s*['"]|^\d+\s+\d+\/\d+\s*"?$/.test(c))) break;
     end++;
   }
   const width = Math.max(...aoa.slice(hi, end + 1).map(r => r.length), 0);
@@ -3069,8 +3070,8 @@ Reply with only JSON: {"map":{"<Microvellum column>": ${state.mv.source === 'est
       if (state.mv.source === 'estimate' && Number.isInteger(+v) && state.mv.estimate.headers[+v] !== undefined) state.mv.map[h] = { type: 'col', v: +v };
       else if (state.mv.source !== 'estimate' && RS_LABEL[v]) state.mv.map[h] = { type: 'field', v };
     }
-    st.textContent = 'Claude’s suggestions are filled in. Check each one.';
     drawMv(); scheduleWorkSave();
+    $('#mvStatus').textContent = 'Claude’s suggestions are filled in. Check each one.';   // after drawMv, which rebuilds the status line
   } catch (e) { st.innerHTML = errCopy(e); }
 }
 
