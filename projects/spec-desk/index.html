@@ -41,6 +41,8 @@ body{margin:0; height:100%; background:var(--bg); color:var(--ink);
 button,input,select,textarea{font:inherit; color:inherit}
 :focus-visible{outline:2px solid var(--focus); outline-offset:2px}
 [hidden]{display:none !important}
+.split-sz{display:inline-flex; gap:.3rem; align-items:center}
+.split-sz select{font-size:.85rem; padding:.2rem; border:1px solid var(--line); border-radius:4px; background:var(--surface)}
 .chk-log{margin:.5rem 0 .8rem; padding:.45rem .7rem; border-left:3px solid var(--ok); background:var(--sunk); border-radius:3px; font-size:.9rem}
 .chk-log summary{cursor:pointer}
 .chk-log ol{margin:.4rem 0 0; padding-left:1.4rem}
@@ -319,6 +321,7 @@ i.pc{cursor:default}
     <div class="bar-actions">
       <button class="btn ghost small need-doc need-dl" id="btnIndex">Save index (CSV)</button>
       <button class="btn ghost small need-doc need-dl" id="btnZip">Save all sections (ZIP)</button>
+      <span class="need-doc need-dl split-sz"><button class="btn ghost small" id="btnSplitSize">Split by size (ZIP)</button><select id="splitMb" aria-label="Largest part size"><option value="10">under 10 MB</option><option value="25" selected>under 25 MB</option><option value="50">under 50 MB</option><option value="100">under 100 MB</option></select></span>
       <label class="btn small need-doc" for="fileInput">Open spec book</label>
     </div>
     <input type="file" id="fileInput" accept="application/pdf,.pdf" hidden>
@@ -1570,6 +1573,121 @@ async function saveZip() {
   btn.disabled = false; btn.textContent = 'Save all sections (ZIP)';
 }
 
+/* ---------- Splitting: drawing sets by sheet, and any PDF into parts under a size limit ---------- */
+// The sheet title: the biggest wording in the title block near the sheet number ("INTERIOR ELEVATIONS")
+const TB_SKIP = /^(?:SHEET(?:\s+(?:NO|NUMBER|TITLE))?|SCALE|DATE|DRAWN|CHECKED|PROJECT|JOB|REV(?:ISION)?S?|ISSUE[DS]?|NO\.?|SEAL|KEY ?PLAN|NORTH|PHASE|FOR CONSTRUCTION|NOT FOR CONSTRUCTION)\b|^[\d\s\/.:,-]+$|\d{1,2}\/\d{1,2}\/\d{2,4}|\.dwg\b/i;
+function sheetTitle(pg) {
+  if (pg.title) return pg.title;
+  const sh = pg.sheet && pg.sheet.ci != null ? pg.chunks[pg.sheet.ci] : null;
+  let best = null, bs = -Infinity;
+  pg.chunks.forEach((c, i) => {
+    if (sh && i === pg.sheet.ci) return;
+    const t = c.s.trim();
+    if (c.nx < 0.6 || c.ny < 0.55 || t.length < 4 || !/[A-Za-z]{3}/.test(t) || TB_SKIP.test(t) || WHOLEID.test(t)) return;
+    const dist = sh ? Math.hypot(c.nx - sh.nx, c.ny - sh.ny) : 0;
+    const score = c.h * 2 - dist * 60 + (sh && c.ny < sh.ny ? 4 : 0);
+    if (score > bs) { bs = score; best = t; }
+  });
+  return best ? best.replace(/\s+/g, ' ').slice(0, 80) : '';
+}
+async function loadSetPdf(set) {
+  const b = await setBlob(set);
+  if (!b) throw new Error(`The original PDF for ${set.name} isn’t saved in this project. Open it again.`);
+  return PDFLib.PDFDocument.load(new Uint8Array(await b.arrayBuffer()), { ignoreEncryption: true, updateMetadata: false });
+}
+const mb = n => n < 1048576 ? Math.max(1, Math.round(n / 1024)) + ' KB' : (n / 1048576).toFixed(n < 10485760 ? 1 : 0) + ' MB';
+const zipBlob = (zip, onPct) => zip.generateAsync({ type: 'blob', compression: 'STORE' }, m => onPct && onPct(m.percent));   // PDFs are already compressed
+
+async function splitSetBySheet(set, btn) {
+  const label = btn.textContent; btn.disabled = true;
+  try {
+    btn.textContent = 'Reading the PDF…';
+    const src = await loadSetPdf(set);
+    const zip = new JSZip(), used = new Map(), rows = [['Sheet', 'Title', 'Series', 'PDF page', 'File', 'Size']];
+    for (const pg of set.pages) {
+      btn.textContent = `Splitting ${pg.n} of ${set.pages.length}…`;
+      const disp = pg.sheet ? pg.sheet.disp : '', title = sheetTitle(pg);
+      const series = pg.sheet && pg.sheet.prefix ? pg.sheet.prefix.toUpperCase() : 'No sheet number';
+      let name = safeName(disp ? `${disp}${title ? ' ' + title : ''}` : `PDF page ${String(pg.n).padStart(4, '0')}${title ? ' ' + title : ''}`);
+      if (used.has(series + '/' + name)) name += ` (PDF p. ${pg.n})`;     // two pages with the same sheet number keep both
+      used.set(series + '/' + name, 1);
+      const bytes = await pagesPdf(src, [pg.n]);
+      zip.file(`${series}/${name}.pdf`, bytes);
+      rows.push([disp, title, series, pg.n, `${series}/${name}.pdf`, mb(bytes.length)]);
+      if (pg.n % 4 === 0) await tick();
+    }
+    zip.file('Sheet list.csv', rows.map(r => r.map(csvCell).join(',')).join('\r\n'));
+    const blob = await zipBlob(zip, p => { btn.textContent = `Packing the ZIP… ${Math.round(p)}%`; });
+    await saveFile(safeName(set.name.replace(/\.pdf$/i, '')) + ' - split by sheet.zip', blob);
+    $('#dwgStatus').textContent = `${set.name}: split into ${plural(set.pages.length, 'sheet PDF')} (${mb(blob.size)}), in folders by sheet series, with a sheet list.`;
+  } catch (e) { $('#dwgStatus').innerHTML = `<span class="err">Couldn’t split ${esc(set.name)}: ${esc(e.message || e)}</span>`; }
+  btn.disabled = false; btn.textContent = label;
+}
+
+// units = groups of pages that must stay together (a spec section, or one drawing sheet), in page order
+function specUnits() {
+  const units = [];
+  for (const p of state.pageMap) {
+    const key = p.primary || null, last = units[units.length - 1];
+    if (last && key && last.key === key) last.pages.push(p.n);
+    else { const sec = key ? state.secMap.get(key) : null; units.push({ key, label: sec ? sec.num : `p. ${p.n}`, pages: [p.n] }); }
+  }
+  return units;
+}
+const setUnits = set => set.pages.map(pg => ({ key: null, label: pg.sheet ? pg.sheet.disp : `p. ${pg.n}`, pages: [pg.n] }));
+async function splitBySize(src, units, limit, base, say) {
+  const notes = [];
+  // measure each unit on its own; a unit over the limit is broken into pages (and a page over it stands alone)
+  const sized = [];
+  for (let i = 0; i < units.length; i++) {
+    const u = units[i];
+    if (i % 5 === 0) { say(`Measuring ${i + 1} of ${units.length}…`); await tick(); }
+    u.size = (await pagesPdf(src, u.pages)).length;
+    if (u.size > limit && u.pages.length > 1) {
+      notes.push(`${u.label} (${plural(u.pages.length, 'page')}, ${mb(u.size)}) is bigger than the limit, so it was split between parts.`);
+      for (const n of u.pages) sized.push({ key: u.key, label: u.label, pages: [n], size: (await pagesPdf(src, [n])).length });
+    } else { if (u.size > limit) notes.push(`${u.label} is ${mb(u.size)} on its own, over the limit; it’s in a part by itself.`); sized.push(u); }
+  }
+  // pack in order; shared fonts make the real part smaller than the sum, and a part that still comes out too big is halved
+  const groups = []; let cur = [], tot = 0;
+  for (const u of sized) { if (cur.length && tot + u.size > limit) { groups.push(cur); cur = []; tot = 0; } cur.push(u); tot += u.size; }
+  if (cur.length) groups.push(cur);
+  const parts = [];
+  const build = async g => {
+    const bytes = await pagesPdf(src, g.flatMap(u => u.pages));
+    if (bytes.length > limit && g.length > 1) { const h = Math.ceil(g.length / 2); await build(g.slice(0, h)); await build(g.slice(h)); }
+    else parts.push({ g, bytes });
+  };
+  for (let i = 0; i < groups.length; i++) { say(`Building part ${i + 1} of about ${groups.length}…`); await build(groups[i]); await tick(); }
+  const zip = new JSZip(), w = String(parts.length).length < 2 ? 2 : String(parts.length).length;
+  const rows = [['Part', 'File', 'Size', 'First', 'Last', 'PDF pages', 'Page count']];
+  parts.forEach((p, i) => {
+    const pages = p.g.flatMap(u => u.pages), first = p.g[0].label, last = p.g[p.g.length - 1].label;
+    const name = safeName(`${base} - part ${String(i + 1).padStart(w, '0')} of ${parts.length} (${first === last ? first : first + ' to ' + last})`) + '.pdf';
+    zip.file(name, p.bytes);
+    rows.push([i + 1, name, mb(p.bytes.length), first, last, ranges(pages).join(', '), pages.length]);
+  });
+  zip.file('Parts list.csv', rows.map(r => r.map(csvCell).join(',')).join('\r\n'));
+  return { zip, parts, notes };
+}
+async function runSplitBySize(which, btn) {
+  const label = btn.textContent; btn.disabled = true;
+  const limit = +(which === 'spec' ? $('#splitMb') : $('#dwgSplitMb')).value * 1048576;
+  const say = t => { btn.textContent = t; };
+  const tell = h => { if (which === 'spec') alertBar(h); else $('#dwgStatus').innerHTML = h; };
+  try {
+    let src, units, base;
+    if (which === 'spec') { say('Reading the PDF…'); src = await getSrcPdf(); units = specUnits(); base = safeName(state.fileName.replace(/\.pdf$/i, '')); }
+    else { const set = findSet(which); say('Reading the PDF…'); src = await loadSetPdf(set); units = setUnits(set); base = safeName(set.name.replace(/\.pdf$/i, '')); }
+    const { zip, parts, notes } = await splitBySize(src, units, limit, base, say);
+    const blob = await zipBlob(zip, p => say(`Packing the ZIP… ${Math.round(p)}%`));
+    await saveFile(`${base} - parts under ${limit / 1048576} MB.zip`, blob);
+    const msg = `Split into ${plural(parts.length, 'part')} under ${limit / 1048576} MB (largest ${mb(Math.max(...parts.map(p => p.bytes.length)))}), keeping ${which === 'spec' ? 'each section' : 'each sheet'} whole${notes.length ? ' where it fits. ' + notes.join(' ') : '.'}`;
+    if (which === 'spec') { const f = $('#fileInfo'); f.textContent = msg; } else tell(esc(msg));
+  } catch (e) { tell(`Couldn’t split the PDF: ${esc(e.message || e)}`); }
+  btn.disabled = false; btn.textContent = label;
+}
+
 /* ---------- reviewer decisions (kept in this browser) ---------- */
 const DECS = [['review', 'Review required'], ['approved', 'Approved exception'], ['correct', 'Correction needed']];
 const DEC_LABEL = Object.fromEntries(DECS);
@@ -1915,6 +2033,8 @@ function renderDrawings() {
       dwgBusy = true; addPictures(files, $('#dwgKind').value, true).finally(() => { dwgBusy = false; });
     });
     pane.addEventListener('click', e => {
+      const sp = e.target.closest('[data-splitsheets]'); if (sp) { const set = findSet(sp.dataset.splitsheets); if (set) splitSetBySheet(set, sp); return; }
+      const sz = e.target.closest('[data-splitsize]'); if (sz) { runSplitBySize(sz.dataset.splitsize, sz); return; }
       const rm = e.target.closest('[data-rmset]');
       if (rm) {
         const i = D.sets.findIndex(s => s.id === rm.dataset.rmset);
@@ -1945,7 +2065,9 @@ function renderDrawings() {
     pane.addEventListener('input', e => { if (e.target.id === 'tagFilter') drawTagTable(); if (e.target.id === 'refFilter') drawRefTable(); });
   }
   drawDwgAsk();
-  $('#dwgSets').innerHTML = D.sets.map(s => `<div class="set-row"><span class="set-kind">${esc(s.kind)}</span><span>${esc(s.name)}</span><span class="note">${s.isImage ? plural(s.pages.length, 'picture') : plural(s.pages.length, 'page')}, ${s.pages.filter(p => p.sheet).length} with sheet numbers</span><button class="btn ghost small" data-rmset="${s.id}">Remove</button></div>`).join('');
+  $('#dwgSets').innerHTML = D.sets.map(s => `<div class="set-row"><span class="set-kind">${esc(s.kind)}</span><span>${esc(s.name)}</span><span class="note">${s.isImage ? plural(s.pages.length, 'picture') : plural(s.pages.length, 'page')}, ${s.pages.filter(p => p.sheet).length} with sheet numbers</span>${s.isImage ? '' : `<button class="btn ghost small need-dl" data-splitsheets="${s.id}">Split into sheets (ZIP)</button><button class="btn ghost small need-dl" data-splitsize="${s.id}">Split by size (ZIP)</button>`}<button class="btn ghost small" data-rmset="${s.id}">Remove</button></div>`).join('') +
+    (D.sets.some(s => !s.isImage) ? `<p class="note need-dl" style="margin:.4rem 0 0">Split by size makes parts <select id="dwgSplitMb" aria-label="Largest part size">${[10, 25, 50, 100].map(n => `<option value="${n}" ${n === 25 ? 'selected' : ''}>under ${n} MB</option>`).join('')}</select>, for email or upload, keeping each sheet whole.</p>` : '');
+  applyCaps();
   drawDwgResults();
 }
 
@@ -4594,6 +4716,7 @@ function init() {
   $('#sbToggle').onclick = () => { const on = document.body.classList.toggle('show-sb'); $('#sbToggle').setAttribute('aria-expanded', String(on)); };
   $('#btnIndex').onclick = () => saveFile(safeName(state.fileName.replace(/\.pdf$/i, '')) + ' - section index.csv', indexCsv());
   $('#btnZip').onclick = saveZip;
+  $('#btnSplitSize').onclick = e => runSplitBySize('spec', e.currentTarget);
   $('#btnDwgOnly').onclick = () => { document.body.classList.remove('no-doc'); $('.tabs').hidden = false; renderSecList(); setTab('drawings'); };
   $('#pvClose').onclick = closePreview;
   document.addEventListener('click', e => { const g = e.target.closest('[data-tab-go]'); if (g) setTab(g.dataset.tabGo); });

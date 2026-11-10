@@ -8,6 +8,7 @@ These drive `index.html` in headless Chromium with a simulated Claude (`mock-cla
     node make-fixtures2.js          # CAD plot + redlines, estimate, Microvellum template, 921-page spec, 507 MB / 512-sheet set
     node run.js  ../index.html      # spec, Ask, Compare, drawings, Drawing review, Ask the drawings, Deep check, errors, reopen
     node run2.js ../index.html      # RE: from pictures, markups, redline scoring, room schedule, estimate, Microvellum, cross-reference
+    node run4.js ../index.html      # splitting: drawing sets by sheet, spec books and drawing sets by size
     node run3.js ../index.html      # large files: 921-page spec book and 507 MB drawing set (takes a few minutes)
 
 If Chromium isn't installed, run `npx playwright install chromium` first. Screenshots go to `shots/`.

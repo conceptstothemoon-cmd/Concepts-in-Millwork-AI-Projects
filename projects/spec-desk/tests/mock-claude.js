@@ -267,6 +267,7 @@
   });
   sample.limits = async () => ({ images: { maxCount: 20 } });
   const downloads = { save: async ({ filename, data }) => {
+    (window.__blobs = window.__blobs || {})[filename] = data;
     let b64 = null;
     if (typeof data !== 'string' && data.size < 5e6) { const u = new Uint8Array(await data.arrayBuffer()); let s = ''; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); b64 = btoa(s); }
     window.__saves.push({ filename, size: typeof data === 'string' ? data.length : data.size, text: typeof data === 'string' ? data.slice(0, 20000) : null, b64 }); } };
