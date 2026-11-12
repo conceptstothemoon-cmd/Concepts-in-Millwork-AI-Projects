@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CIM Quality Dashboard</title>
+<link rel="icon" href="../entry/icons/icon-192.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="tooltip" id="tooltip"></div>
+
+<div class="dashboard">
+  <div class="header">
+    <div class="header-inner">
+      <div class="header-brand">
+        <div class="header-logo">CIM</div>
+        <div>
+          <h1>Quality Analytics Dashboard <span class="header-badge" id="mode-badge" hidden>Demo mode</span></h1>
+          <div class="header-sub">Concepts in Millwork · Quality Issues</div>
+        </div>
+      </div>
+      <div class="header-actions">
+        <span id="user-name"></span>
+        <a href="../entry/">+ Report Issue</a>
+        <button id="refresh-btn" type="button">Refresh</button>
+        <button id="auth-btn" type="button" hidden></button>
+      </div>
+    </div>
+  </div>
+
+  <div class="banner" id="banner"></div>
+
+  <nav class="nav" id="nav">
+    <button class="active" data-page="exec">Executive Summary</button>
+    <button data-page="pareto">Pareto Analysis</button>
+  </nav>
+
+  <div class="filter-bar">
+    <label for="periodFilter">Period</label>
+    <select id="periodFilter">
+      <option value="90">Last 90 Days</option>
+      <option value="30" selected>Last 30 Days</option>
+      <option value="7">Last 7 Days</option>
+      <option value="mtd">Month to Date</option>
+    </select>
+    <label for="sevFilter">Severity</label>
+    <select id="sevFilter">
+      <option value="" selected>All</option>
+    </select>
+    <label for="deptFilter">Department</label>
+    <select id="deptFilter">
+      <option value="" selected>All Departments</option>
+    </select>
+  </div>
+
+  <!-- PAGE 1: Executive Summary -->
+  <div class="page active" id="page-exec">
+    <div class="tiles" id="exec-tiles"></div>
+    <div class="chart-grid">
+      <div class="chart-card">
+        <h3>Issues Over Time</h3>
+        <div class="subtitle" id="trend-subtitle">Issues reported per week, and how many of those are now resolved</div>
+        <div class="legend">
+          <div class="legend-item"><span class="legend-swatch" style="background:var(--s1)"></span>Reported</div>
+          <div class="legend-item"><span class="legend-swatch" style="background:var(--s3)"></span>Resolved</div>
+        </div>
+        <div id="trend-chart" style="height:220px; position:relative;"></div>
+      </div>
+      <div class="chart-card">
+        <h3>Issues by Severity</h3>
+        <div class="subtitle">Distribution across severity levels</div>
+        <div id="severity-chart" style="height:220px; position:relative;"></div>
+      </div>
+    </div>
+    <div class="chart-card">
+      <h3>Recent Issues</h3>
+      <div class="subtitle">Latest quality issues logged</div>
+      <div class="table-scroll">
+        <table class="data-table" id="recent-table">
+          <thead>
+            <tr><th>ID</th><th>Date</th><th>Project</th><th>Description</th><th>Caught By</th><th>Created By</th><th>Severity</th><th>Status</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAGE 2: Pareto Analysis -->
+  <div class="page" id="page-pareto">
+    <div class="chart-grid">
+      <div class="chart-card">
+        <h3>Caught By Department</h3>
+        <div class="subtitle">Which departments find the issues — bars ranked highest-to-lowest, line is cumulative %</div>
+        <div class="legend">
+          <div class="legend-item"><span class="legend-rect" style="background:var(--s1)"></span>Count</div>
+          <div class="legend-item"><span class="legend-swatch" style="background:var(--cumline)"></span>Cumulative %</div>
+        </div>
+        <div id="pareto-caught" style="height:280px; position:relative;"></div>
+      </div>
+      <div class="chart-card">
+        <h3>Created By Department</h3>
+        <div class="subtitle">Which departments originate the issues — where to focus prevention</div>
+        <div class="legend">
+          <div class="legend-item"><span class="legend-rect" style="background:var(--s2)"></span>Count</div>
+          <div class="legend-item"><span class="legend-swatch" style="background:var(--cumline)"></span>Cumulative %</div>
+        </div>
+        <div id="pareto-created" style="height:280px; position:relative;"></div>
+      </div>
+    </div>
+    <div class="chart-card">
+      <h3>Caught vs Created Matrix</h3>
+      <div class="subtitle">Cross-reference: who catches issues created by which department</div>
+      <div class="table-scroll" id="matrix-container"></div>
+    </div>
+  </div>
+</div>
+
+<script src="../shared/vendor/msal-browser.min.js"></script>
+<script src="../shared/config.js"></script>
+<script src="../shared/lists.js"></script>
+<script src="../shared/sample-data.js"></script>
+<script src="../shared/auth.js"></script>
+<script src="../shared/data.js"></script>
+<script src="dashboard.js"></script>
+</body>
+</html>

@@ -1,0 +1,241 @@
+Project,DateReported,MNumber,Category,Description,Severity,CaughtBy,CreatedBy,ReportedBy,RootCause,CostImpact,Status
+Riverside Medical Office,2026-08-07,M25,Hardware Issue,Drawer slide mounting holes misaligned,Low,Installation,Programming,Sarah Chen,Material Issue,1203,Open
+Riverside Medical Office,2026-08-20,M03,Material Defect,Crown molding profile wrong,Critical,Project Management,Millwork,Karen Thompson,Material Issue,3963,Resolved
+Pinnacle Hotel Reception,2026-10-17,M24,Design Mismatch,Shelf pin holes 32mm off pattern,Medium,Case Work,Estimating,Chris Davis,Human Error,1394,Resolved
+Pinnacle Hotel Reception,2026-06-24,M05,Hardware Issue,Edge band peeling at corner,Medium,Case Work,Case Work,Ray Tilley,Training Gap,1035,In Progress
+Metro Tower Lobby,2026-09-11,M17,Installation Issue,Veneer grain direction reversed,Medium,Project Management,Installation,James Mitchell,Equipment Malfunction,389,Open
+Pinnacle Hotel Reception,2026-10-06,M05,Hardware Issue,Scribe molding gap too wide,Critical,Programming,Millwork,Ray Tilley,Design Error,7474,Open
+Heritage Bank Branch,2026-09-02,M28,Design Mismatch,Wrong laminate applied to face,High,Installation,Project Management,Sarah Chen,Design Error,1498,Resolved
+Pinnacle Hotel Reception,2026-08-22,M16,Installation Issue,Crown molding profile wrong,Medium,Installation,CNC,Dave Wilson,Communication Failure,1482,Resolved
+Pinnacle Hotel Reception,2026-09-09,M12,Assembly Error,Pull hardware bore spacing wrong,Medium,Engineering,Programming,Ray Tilley,Equipment Malfunction,567,Resolved
+Pinnacle Hotel Reception,2026-05-25,M15,Finish Quality,Door overlay inconsistent,Medium,Case Work,Procurement,Chris Davis,Communication Failure,288,Open
+Pinnacle Hotel Reception,2026-08-06,M12,Material Defect,Back panel bowing out,High,Millwork,Engineering,Tom Bauer,Material Issue,1004,Open
+Riverside Medical Office,2026-07-22,M07,Installation Issue,Drawer slide mounting holes misaligned,Medium,Delivery,Programming,Mike Santos,Design Error,406,In Progress
+Central Library Renovation,2026-10-10,M13,Assembly Error,Veneer grain direction reversed,Medium,Layup,Procurement,Tom Bauer,Training Gap,1535,In Progress
+Central Library Renovation,2026-09-07,M29,Hardware Issue,"Panel width 1/4"" over spec",Medium,Case Work,Case Work,Karen Thompson,Process Gap,263,Resolved
+Riverside Medical Office,2026-09-29,M04,Shipping Damage,Back panel bowing out,High,Installation,Project Management,Amy Rodriguez,Communication Failure,2540,Resolved
+Metro Tower Lobby,2026-05-14,M08,Hardware Issue,"Panel width 1/4"" over spec",High,CNC,Engineering,Mike Santos,Material Issue,4403,Resolved
+Pinnacle Hotel Reception,2026-09-10,M03,Installation Issue,Base cabinet toe kick short,Low,Millwork,Case Work,Lisa Park,Vendor Issue,1218,In Progress
+Heritage Bank Branch,2026-10-13,M02,Hardware Issue,Door overlay inconsistent,High,Case Work,Layup,Amy Rodriguez,Equipment Malfunction,2788,In Progress
+Central Library Renovation,2026-07-11,M20,Material Defect,"Panel width 1/4"" over spec",High,Millwork,Millwork,Dave Wilson,Vendor Issue,1108,Open
+Pinnacle Hotel Reception,2026-08-12,M19,Shipping Damage,Soft close mechanism not engaging,Medium,Installation,Case Work,James Mitchell,Human Error,651,Open
+Summit Office Tower,2026-08-17,M02,Hardware Issue,Soft close mechanism not engaging,Low,Installation,Programming,Karen Thompson,Equipment Malfunction,1055,Open
+Heritage Bank Branch,2026-08-03,M13,Assembly Error,Base cabinet toe kick short,Medium,Edge Banding,Engineering,Karen Thompson,Design Error,708,Resolved
+Summit Office Tower,2026-08-22,M28,Hardware Issue,Crown molding profile wrong,Low,Installation,Millwork,Tom Bauer,Training Gap,1573,Open
+Summit Office Tower,2026-05-27,M22,Material Defect,Shelf pin holes 32mm off pattern,High,Engineering,Project Management,Lisa Park,Training Gap,3473,Resolved
+Heritage Bank Branch,2026-08-24,M12,Design Mismatch,Back panel bowing out,Low,Installation,Project Management,Amy Rodriguez,Process Gap,1286,Open
+Heritage Bank Branch,2026-07-20,M03,Hardware Issue,Hinge bore spacing off by 2mm,Low,CNC,Procurement,Chris Davis,Equipment Malfunction,280,Open
+Heritage Bank Branch,2026-07-07,M09,Dimensional Error,Back panel bowing out,Medium,Millwork,Engineering,Tom Bauer,Process Gap,1369,Open
+Central Library Renovation,2026-10-05,M09,Documentation Error,Wrong laminate applied to face,High,Installation,Case Work,James Mitchell,Material Issue,704,Resolved
+Heritage Bank Branch,2026-09-19,M15,Material Defect,Door overlay inconsistent,High,CNC,Case Work,Amy Rodriguez,Training Gap,2617,In Progress
+Central Library Renovation,2026-09-10,M29,Shipping Damage,Door overlay inconsistent,Medium,Millwork,Project Management,Lisa Park,Process Gap,1180,Resolved
+Metro Tower Lobby,2026-07-19,M05,Installation Issue,Veneer grain direction reversed,High,Case Work,Millwork,Lisa Park,Training Gap,2567,Open
+Central Library Renovation,2026-05-27,M20,Documentation Error,Countertop seam visible,Medium,Millwork,Case Work,Sarah Chen,Communication Failure,1227,Resolved
+Pinnacle Hotel Reception,2026-10-08,M24,Shipping Damage,European hinge cup depth off,Low,Installation,Procurement,Sarah Chen,Training Gap,1329,Resolved
+Metro Tower Lobby,2026-06-10,M19,Material Defect,Crown molding profile wrong,High,Delivery,Millwork,James Mitchell,Material Issue,1975,Open
+Pinnacle Hotel Reception,2026-11-05,M15,Shipping Damage,Base cabinet toe kick short,High,Case Work,Project Management,James Mitchell,Vendor Issue,2070,In Progress
+Summit Office Tower,2026-10-28,M28,Documentation Error,Crown molding profile wrong,Low,Estimating,Estimating,Sarah Chen,Process Gap,401,Resolved
+Metro Tower Lobby,2026-08-21,M16,Installation Issue,Edge band peeling at corner,Medium,Installation,Case Work,Ray Tilley,Process Gap,1271,In Progress
+Summit Office Tower,2026-10-14,M07,Documentation Error,Back panel bowing out,Medium,Layup,Project Management,Ray Tilley,Process Gap,1421,Resolved
+Central Library Renovation,2026-06-04,M29,Material Defect,Filler strip not flush,Critical,Case Work,Installation,Chris Davis,Process Gap,6513,Open
+Summit Office Tower,2026-06-18,M04,Finish Quality,Door overlay inconsistent,Critical,Programming,Engineering,Karen Thompson,Equipment Malfunction,8195,Resolved
+Pinnacle Hotel Reception,2026-06-04,M15,Documentation Error,Crown molding profile wrong,Low,Case Work,Programming,Tom Bauer,Human Error,467,Resolved
+Heritage Bank Branch,2026-07-19,M25,Documentation Error,Crown molding profile wrong,Low,Edge Banding,Procurement,Amy Rodriguez,Vendor Issue,1277,In Progress
+Central Library Renovation,2026-05-19,M23,Dimensional Error,Back panel bowing out,Medium,Case Work,CNC,Ray Tilley,Training Gap,479,In Progress
+Riverside Medical Office,2026-09-13,M25,Design Mismatch,Back panel bowing out,Critical,Millwork,Millwork,Ray Tilley,Material Issue,8852,Resolved
+Riverside Medical Office,2026-10-01,M22,Assembly Error,Shelf pin holes 32mm off pattern,High,Layup,Millwork,Sarah Chen,Vendor Issue,2997,Open
+Pinnacle Hotel Reception,2026-08-26,M12,Shipping Damage,Scribe molding gap too wide,High,Installation,Engineering,Karen Thompson,Material Issue,1885,Open
+Riverside Medical Office,2026-09-20,M06,Assembly Error,Hinge bore spacing off by 2mm,Medium,Installation,Engineering,James Mitchell,Equipment Malfunction,753,Resolved
+Metro Tower Lobby,2026-10-25,M10,Dimensional Error,Edge band peeling at corner,Medium,Case Work,CNC,Ray Tilley,Human Error,1127,In Progress
+Metro Tower Lobby,2026-08-29,M23,Material Defect,European hinge cup depth off,High,Installation,Layup,Amy Rodriguez,Equipment Malfunction,3046,In Progress
+Heritage Bank Branch,2026-08-20,M17,Finish Quality,Door overlay inconsistent,Low,Delivery,Estimating,Karen Thompson,Material Issue,1120,Resolved
+Riverside Medical Office,2026-06-29,M21,Assembly Error,Back panel bowing out,Critical,Estimating,Engineering,James Mitchell,Material Issue,5514,In Progress
+Summit Office Tower,2026-05-14,M14,Hardware Issue,Scribe molding gap too wide,High,Case Work,Millwork,Ray Tilley,Process Gap,4044,Resolved
+Summit Office Tower,2026-09-11,M19,Assembly Error,Soft close mechanism not engaging,Critical,Delivery,Case Work,Chris Davis,Human Error,7066,In Progress
+Riverside Medical Office,2026-08-23,M02,Installation Issue,Soft close mechanism not engaging,High,Delivery,Engineering,Sarah Chen,Human Error,850,Resolved
+Heritage Bank Branch,2026-07-06,M30,Documentation Error,Door overlay inconsistent,High,Edge Banding,Estimating,Chris Davis,Design Error,2484,Resolved
+Pinnacle Hotel Reception,2026-09-11,M10,Installation Issue,Wrong laminate applied to face,High,Programming,Case Work,Chris Davis,Design Error,4345,Resolved
+Metro Tower Lobby,2026-07-22,M03,Dimensional Error,"Panel width 1/4"" over spec",Critical,Installation,Engineering,Karen Thompson,Design Error,2217,Open
+Riverside Medical Office,2026-05-29,M10,Hardware Issue,Back panel bowing out,Medium,Edge Banding,Millwork,Mike Santos,Vendor Issue,1012,In Progress
+Metro Tower Lobby,2026-11-07,M03,Assembly Error,"Panel width 1/4"" over spec",Medium,Installation,Estimating,Dave Wilson,Communication Failure,238,In Progress
+Summit Office Tower,2026-09-11,M20,Design Mismatch,Shelf pin holes 32mm off pattern,High,Case Work,Programming,Mike Santos,Human Error,1172,Open
+Pinnacle Hotel Reception,2026-08-25,M19,Finish Quality,Edge band peeling at corner,Medium,Project Management,Programming,Karen Thompson,Process Gap,928,In Progress
+Riverside Medical Office,2026-06-25,M15,Hardware Issue,Soft close mechanism not engaging,Medium,Case Work,Engineering,Amy Rodriguez,Vendor Issue,912,Resolved
+Central Library Renovation,2026-07-12,M01,Assembly Error,Countertop seam visible,Low,Case Work,Project Management,Ray Tilley,Material Issue,152,Resolved
+Heritage Bank Branch,2026-10-11,M25,Finish Quality,Veneer grain direction reversed,Medium,Programming,Engineering,Lisa Park,Material Issue,838,In Progress
+Metro Tower Lobby,2026-06-02,M25,Hardware Issue,Veneer grain direction reversed,Low,Installation,Delivery,Amy Rodriguez,Training Gap,603,In Progress
+Riverside Medical Office,2026-07-06,M16,Assembly Error,Melamine chip at cut edge,High,Project Management,Layup,Tom Bauer,Training Gap,2197,Resolved
+Summit Office Tower,2026-07-06,M20,Hardware Issue,Drawer slide mounting holes misaligned,Low,Engineering,Project Management,Chris Davis,Communication Failure,1028,Open
+Metro Tower Lobby,2026-07-16,M29,Dimensional Error,Shelf pin holes 32mm off pattern,Medium,Edge Banding,Project Management,Chris Davis,Equipment Malfunction,618,Open
+Metro Tower Lobby,2026-10-05,M11,Shipping Damage,European hinge cup depth off,Low,Project Management,Millwork,Dave Wilson,Design Error,1487,Open
+Riverside Medical Office,2026-10-14,M27,Documentation Error,Pull hardware bore spacing wrong,High,Installation,Programming,Karen Thompson,Communication Failure,4036,Open
+Metro Tower Lobby,2026-09-30,M07,Documentation Error,Melamine chip at cut edge,Low,Millwork,Installation,Amy Rodriguez,Equipment Malfunction,128,Open
+Metro Tower Lobby,2026-09-06,M05,Installation Issue,Crown molding profile wrong,Low,Installation,Installation,Mike Santos,Human Error,119,Resolved
+Metro Tower Lobby,2026-09-03,M06,Dimensional Error,Shelf pin holes 32mm off pattern,High,Estimating,Project Management,Sarah Chen,Equipment Malfunction,3876,Open
+Pinnacle Hotel Reception,2026-07-25,M28,Dimensional Error,Drawer slide mounting holes misaligned,Medium,Engineering,Engineering,Karen Thompson,Process Gap,371,In Progress
+Central Library Renovation,2026-08-26,M01,Hardware Issue,Hinge bore spacing off by 2mm,High,Installation,Engineering,Dave Wilson,Human Error,1788,Resolved
+Metro Tower Lobby,2026-11-02,M21,Finish Quality,"Panel width 1/4"" over spec",Medium,Installation,Engineering,Sarah Chen,Human Error,296,Open
+Metro Tower Lobby,2026-07-08,M17,Material Defect,"Panel width 1/4"" over spec",Low,Case Work,Case Work,Sarah Chen,Human Error,801,Resolved
+Pinnacle Hotel Reception,2026-05-19,M23,Assembly Error,Hinge bore spacing off by 2mm,High,Millwork,Programming,Sarah Chen,Material Issue,2437,In Progress
+Metro Tower Lobby,2026-07-10,M01,Design Mismatch,Back panel bowing out,Medium,Installation,Millwork,Tom Bauer,Training Gap,253,Resolved
+Pinnacle Hotel Reception,2026-06-26,M09,Hardware Issue,Filler strip not flush,Low,Engineering,Engineering,Ray Tilley,Communication Failure,850,In Progress
+Metro Tower Lobby,2026-08-31,M30,Hardware Issue,Pull hardware bore spacing wrong,Medium,Case Work,Millwork,Mike Santos,Communication Failure,1514,Resolved
+Metro Tower Lobby,2026-09-29,M18,Dimensional Error,Filler strip not flush,High,Delivery,Estimating,Lisa Park,Communication Failure,3697,Resolved
+Heritage Bank Branch,2026-07-28,M16,Installation Issue,European hinge cup depth off,Medium,Millwork,Engineering,Chris Davis,Equipment Malfunction,932,Open
+Riverside Medical Office,2026-10-31,M04,Design Mismatch,Wrong laminate applied to face,Medium,Case Work,Procurement,Sarah Chen,Process Gap,1362,Resolved
+Riverside Medical Office,2026-10-09,M03,Design Mismatch,Base cabinet toe kick short,Medium,Engineering,Layup,Tom Bauer,Human Error,437,In Progress
+Summit Office Tower,2026-09-07,M13,Assembly Error,Back panel bowing out,Low,Case Work,Programming,James Mitchell,Training Gap,1238,Resolved
+Summit Office Tower,2026-07-09,M16,Hardware Issue,"Panel width 1/4"" over spec",Critical,Millwork,Edge Banding,Sarah Chen,Material Issue,7453,Resolved
+Riverside Medical Office,2026-08-22,M26,Dimensional Error,"Panel width 1/4"" over spec",Low,Case Work,Procurement,Mike Santos,Human Error,1269,Open
+Metro Tower Lobby,2026-09-12,M30,Documentation Error,Door overlay inconsistent,Low,Edge Banding,Engineering,Sarah Chen,Material Issue,1507,Open
+Riverside Medical Office,2026-10-24,M20,Hardware Issue,European hinge cup depth off,Critical,Case Work,Engineering,Sarah Chen,Material Issue,7269,In Progress
+Metro Tower Lobby,2026-08-23,M04,Documentation Error,Drawer slide mounting holes misaligned,Critical,Installation,Procurement,Amy Rodriguez,Communication Failure,9161,Open
+Riverside Medical Office,2026-10-05,M26,Finish Quality,Countertop seam visible,Medium,Case Work,Procurement,Sarah Chen,Human Error,100,Resolved
+Metro Tower Lobby,2026-10-16,M07,Installation Issue,Veneer grain direction reversed,Low,Project Management,Edge Banding,Lisa Park,Design Error,713,Resolved
+Riverside Medical Office,2026-11-04,M30,Finish Quality,Crown molding profile wrong,Medium,Installation,Installation,Chris Davis,Design Error,781,Resolved
+Summit Office Tower,2026-06-01,M25,Material Defect,Crown molding profile wrong,Low,Installation,Engineering,James Mitchell,Training Gap,379,In Progress
+Metro Tower Lobby,2026-08-13,M28,Dimensional Error,European hinge cup depth off,Medium,Delivery,Procurement,Dave Wilson,Vendor Issue,891,Resolved
+Heritage Bank Branch,2026-08-22,M10,Material Defect,Back panel bowing out,Critical,Millwork,Estimating,Lisa Park,Material Issue,5391,Resolved
+Heritage Bank Branch,2026-09-19,M22,Shipping Damage,Base cabinet toe kick short,Critical,Case Work,Project Management,Amy Rodriguez,Material Issue,8378,Resolved
+Riverside Medical Office,2026-10-02,M09,Documentation Error,Base cabinet toe kick short,Critical,Installation,Project Management,Dave Wilson,Material Issue,6437,Resolved
+Central Library Renovation,2026-06-08,M16,Hardware Issue,Soft close mechanism not engaging,Medium,Millwork,Estimating,Amy Rodriguez,Vendor Issue,544,Resolved
+Heritage Bank Branch,2026-05-26,M11,Documentation Error,Hinge bore spacing off by 2mm,High,Layup,Engineering,Mike Santos,Equipment Malfunction,3096,In Progress
+Riverside Medical Office,2026-05-27,M25,Dimensional Error,"Panel width 1/4"" over spec",Medium,Project Management,Millwork,Dave Wilson,Training Gap,729,Open
+Heritage Bank Branch,2026-10-07,M02,Shipping Damage,Wrong laminate applied to face,Low,Case Work,Case Work,Sarah Chen,Vendor Issue,1515,In Progress
+Central Library Renovation,2026-10-24,M24,Installation Issue,Veneer grain direction reversed,Critical,Installation,Engineering,James Mitchell,Design Error,5646,Resolved
+Riverside Medical Office,2026-09-28,M16,Finish Quality,Base cabinet toe kick short,Medium,Case Work,Project Management,James Mitchell,Design Error,740,Open
+Metro Tower Lobby,2026-06-10,M23,Finish Quality,Pull hardware bore spacing wrong,Medium,Project Management,CNC,Amy Rodriguez,Human Error,1552,Resolved
+Central Library Renovation,2026-06-24,M03,Finish Quality,European hinge cup depth off,Medium,Delivery,Engineering,Tom Bauer,Human Error,708,Resolved
+Metro Tower Lobby,2026-08-03,M17,Installation Issue,Countertop seam visible,Low,Case Work,Case Work,Ray Tilley,Material Issue,319,In Progress
+Pinnacle Hotel Reception,2026-07-11,M05,Dimensional Error,Back panel bowing out,High,Delivery,Engineering,Tom Bauer,Material Issue,1476,Open
+Summit Office Tower,2026-08-29,M15,Material Defect,Filler strip not flush,Medium,Millwork,Procurement,James Mitchell,Process Gap,1600,Resolved
+Heritage Bank Branch,2026-07-28,M01,Assembly Error,Veneer grain direction reversed,Low,Case Work,Engineering,Chris Davis,Equipment Malfunction,705,In Progress
+Pinnacle Hotel Reception,2026-08-10,M10,Shipping Damage,Melamine chip at cut edge,Low,Project Management,Engineering,Chris Davis,Design Error,1470,Resolved
+Central Library Renovation,2026-06-17,M25,Documentation Error,Pull hardware bore spacing wrong,High,Engineering,Programming,Mike Santos,Human Error,3871,Resolved
+Pinnacle Hotel Reception,2026-07-11,M21,Shipping Damage,Pull hardware bore spacing wrong,Critical,Layup,Case Work,Amy Rodriguez,Communication Failure,7655,Resolved
+Heritage Bank Branch,2026-09-10,M15,Installation Issue,Pull hardware bore spacing wrong,High,Delivery,Engineering,Tom Bauer,Training Gap,4222,Resolved
+Metro Tower Lobby,2026-08-02,M27,Shipping Damage,Wrong laminate applied to face,High,Case Work,Case Work,Chris Davis,Vendor Issue,2338,Resolved
+Summit Office Tower,2026-07-08,M26,Shipping Damage,Hinge bore spacing off by 2mm,Low,Installation,Case Work,Karen Thompson,Vendor Issue,1369,Resolved
+Pinnacle Hotel Reception,2026-10-23,M03,Material Defect,Soft close mechanism not engaging,Medium,Case Work,Engineering,James Mitchell,Training Gap,667,Open
+Metro Tower Lobby,2026-07-10,M19,Hardware Issue,Shelf pin holes 32mm off pattern,Critical,Case Work,Engineering,James Mitchell,Training Gap,9697,Resolved
+Central Library Renovation,2026-05-26,M21,Material Defect,Countertop seam visible,Medium,CNC,Estimating,Dave Wilson,Design Error,938,Open
+Heritage Bank Branch,2026-07-28,M30,Design Mismatch,Crown molding profile wrong,Critical,Estimating,Engineering,Sarah Chen,Process Gap,3361,In Progress
+Pinnacle Hotel Reception,2026-08-19,M30,Design Mismatch,"Panel width 1/4"" over spec",Low,Installation,Case Work,Sarah Chen,Vendor Issue,408,In Progress
+Heritage Bank Branch,2026-07-22,M23,Dimensional Error,Door overlay inconsistent,High,Millwork,Programming,Sarah Chen,Design Error,1303,Resolved
+Summit Office Tower,2026-10-22,M04,Installation Issue,Soft close mechanism not engaging,Low,Project Management,Delivery,James Mitchell,Design Error,210,Open
+Metro Tower Lobby,2026-08-16,M12,Hardware Issue,Back panel bowing out,High,Installation,Engineering,Ray Tilley,Training Gap,3472,Resolved
+Summit Office Tower,2026-11-08,M09,Shipping Damage,Veneer grain direction reversed,Critical,Installation,Delivery,Dave Wilson,Training Gap,9864,Open
+Heritage Bank Branch,2026-07-20,M04,Design Mismatch,Pull hardware bore spacing wrong,High,Delivery,Engineering,Sarah Chen,Design Error,862,In Progress
+Summit Office Tower,2026-05-23,M07,Documentation Error,Countertop seam visible,High,Installation,Engineering,Amy Rodriguez,Training Gap,2062,In Progress
+Central Library Renovation,2026-10-28,M28,Material Defect,Door overlay inconsistent,Critical,Installation,CNC,Chris Davis,Design Error,2454,Resolved
+Riverside Medical Office,2026-06-27,M08,Assembly Error,Drawer slide mounting holes misaligned,Critical,Estimating,Installation,Tom Bauer,Equipment Malfunction,6633,Resolved
+Riverside Medical Office,2026-10-22,M05,Hardware Issue,Melamine chip at cut edge,Low,Installation,CNC,Chris Davis,Training Gap,1176,Resolved
+Central Library Renovation,2026-09-06,M19,Documentation Error,Hinge bore spacing off by 2mm,Medium,Edge Banding,Engineering,Ray Tilley,Communication Failure,1262,Resolved
+Metro Tower Lobby,2026-06-27,M30,Dimensional Error,Scribe molding gap too wide,Medium,Case Work,Installation,Lisa Park,Design Error,372,Resolved
+Summit Office Tower,2026-10-06,M01,Finish Quality,Edge band peeling at corner,Medium,CNC,Millwork,Chris Davis,Human Error,466,Resolved
+Summit Office Tower,2026-10-31,M13,Documentation Error,Wrong laminate applied to face,High,Installation,Estimating,Ray Tilley,Equipment Malfunction,4026,Resolved
+Pinnacle Hotel Reception,2026-06-27,M24,Finish Quality,Soft close mechanism not engaging,High,Engineering,Engineering,Lisa Park,Training Gap,3410,Resolved
+Heritage Bank Branch,2026-07-23,M07,Installation Issue,Wrong laminate applied to face,Low,Delivery,Edge Banding,Chris Davis,Vendor Issue,718,Open
+Riverside Medical Office,2026-08-23,M13,Documentation Error,Pull hardware bore spacing wrong,Critical,Installation,Engineering,Mike Santos,Training Gap,5890,Open
+Pinnacle Hotel Reception,2026-08-15,M09,Documentation Error,Shelf pin holes 32mm off pattern,Low,Installation,Project Management,James Mitchell,Training Gap,888,Open
+Summit Office Tower,2026-06-21,M28,Material Defect,"Panel width 1/4"" over spec",Critical,Millwork,Engineering,Ray Tilley,Process Gap,9047,Resolved
+Metro Tower Lobby,2026-07-03,M08,Hardware Issue,Back panel bowing out,Low,Delivery,Programming,Lisa Park,Communication Failure,967,Resolved
+Metro Tower Lobby,2026-10-01,M23,Finish Quality,Melamine chip at cut edge,High,Edge Banding,Programming,Sarah Chen,Human Error,1223,Open
+Riverside Medical Office,2026-05-28,M20,Design Mismatch,Edge band peeling at corner,Low,Layup,Case Work,Ray Tilley,Vendor Issue,1560,Open
+Riverside Medical Office,2026-06-22,M27,Shipping Damage,Shelf pin holes 32mm off pattern,Medium,Case Work,CNC,Karen Thompson,Vendor Issue,184,Resolved
+Pinnacle Hotel Reception,2026-06-14,M26,Material Defect,Filler strip not flush,Low,Edge Banding,Millwork,Karen Thompson,Communication Failure,1462,In Progress
+Summit Office Tower,2026-09-04,M27,Installation Issue,Shelf pin holes 32mm off pattern,Low,Installation,Case Work,Dave Wilson,Vendor Issue,873,In Progress
+Heritage Bank Branch,2026-09-18,M14,Material Defect,Back panel bowing out,High,Delivery,Procurement,James Mitchell,Vendor Issue,1733,In Progress
+Pinnacle Hotel Reception,2026-10-29,M20,Dimensional Error,Base cabinet toe kick short,Critical,Edge Banding,Layup,Tom Bauer,Training Gap,8151,Open
+Metro Tower Lobby,2026-07-17,M01,Dimensional Error,Drawer slide mounting holes misaligned,Medium,Procurement,Procurement,Chris Davis,Communication Failure,1101,Resolved
+Heritage Bank Branch,2026-08-13,M23,Shipping Damage,Pull hardware bore spacing wrong,Critical,Layup,Estimating,Lisa Park,Training Gap,2013,Open
+Pinnacle Hotel Reception,2026-10-01,M27,Installation Issue,"Panel width 1/4"" over spec",Critical,Installation,Case Work,Ray Tilley,Human Error,7169,In Progress
+Heritage Bank Branch,2026-06-24,M03,Assembly Error,Scribe molding gap too wide,Low,Delivery,Edge Banding,Sarah Chen,Design Error,783,Resolved
+Riverside Medical Office,2026-06-06,M22,Dimensional Error,Pull hardware bore spacing wrong,Medium,Millwork,Procurement,Ray Tilley,Material Issue,961,Resolved
+Pinnacle Hotel Reception,2026-10-11,M10,Documentation Error,Base cabinet toe kick short,Low,Engineering,Engineering,Sarah Chen,Communication Failure,1358,Resolved
+Central Library Renovation,2026-07-10,M06,Design Mismatch,Soft close mechanism not engaging,High,Case Work,Millwork,Amy Rodriguez,Communication Failure,799,Resolved
+Pinnacle Hotel Reception,2026-10-23,M07,Design Mismatch,Veneer grain direction reversed,High,Installation,Case Work,Chris Davis,Vendor Issue,2971,Resolved
+Heritage Bank Branch,2026-07-31,M14,Documentation Error,Base cabinet toe kick short,Low,Case Work,Programming,Lisa Park,Training Gap,487,Open
+Pinnacle Hotel Reception,2026-09-09,M29,Dimensional Error,Drawer slide mounting holes misaligned,Critical,Case Work,Programming,Lisa Park,Communication Failure,2286,Resolved
+Metro Tower Lobby,2026-07-26,M24,Assembly Error,Hinge bore spacing off by 2mm,Critical,Estimating,Engineering,Dave Wilson,Vendor Issue,8967,Open
+Metro Tower Lobby,2026-09-26,M12,Material Defect,"Panel width 1/4"" over spec",Critical,Installation,Engineering,Mike Santos,Vendor Issue,2395,Resolved
+Metro Tower Lobby,2026-10-22,M09,Assembly Error,Edge band peeling at corner,Medium,Edge Banding,Programming,Tom Bauer,Communication Failure,281,Resolved
+Riverside Medical Office,2026-09-16,M01,Shipping Damage,Veneer grain direction reversed,Critical,Installation,CNC,Tom Bauer,Training Gap,3341,Open
+Riverside Medical Office,2026-06-27,M17,Design Mismatch,Soft close mechanism not engaging,High,Engineering,Millwork,Dave Wilson,Process Gap,1365,Resolved
+Riverside Medical Office,2026-07-17,M17,Documentation Error,Shelf pin holes 32mm off pattern,Medium,Installation,CNC,Chris Davis,Vendor Issue,530,Resolved
+Heritage Bank Branch,2026-08-20,M02,Documentation Error,Shelf pin holes 32mm off pattern,High,Project Management,Edge Banding,Chris Davis,Communication Failure,1698,Resolved
+Metro Tower Lobby,2026-09-14,M14,Installation Issue,Soft close mechanism not engaging,Medium,Delivery,Layup,Karen Thompson,Design Error,235,Open
+Summit Office Tower,2026-08-09,M11,Material Defect,Shelf pin holes 32mm off pattern,Critical,Installation,Programming,James Mitchell,Design Error,8937,Resolved
+Heritage Bank Branch,2026-07-03,M29,Material Defect,Crown molding profile wrong,High,CNC,Programming,James Mitchell,Communication Failure,4045,Open
+Central Library Renovation,2026-09-22,M06,Documentation Error,Veneer grain direction reversed,Critical,Layup,Layup,Amy Rodriguez,Process Gap,9340,Resolved
+Pinnacle Hotel Reception,2026-07-25,M15,Documentation Error,European hinge cup depth off,Medium,Installation,Case Work,Lisa Park,Process Gap,1104,Open
+Central Library Renovation,2026-09-01,M07,Hardware Issue,Drawer slide mounting holes misaligned,High,Millwork,Layup,Lisa Park,Human Error,1204,Open
+Pinnacle Hotel Reception,2026-06-23,M15,Material Defect,Melamine chip at cut edge,Medium,CNC,Engineering,Dave Wilson,Design Error,436,Open
+Central Library Renovation,2026-10-30,M05,Installation Issue,European hinge cup depth off,Low,CNC,Programming,Mike Santos,Human Error,1235,In Progress
+Central Library Renovation,2026-07-06,M19,Design Mismatch,Wrong laminate applied to face,Low,Millwork,Millwork,Sarah Chen,Material Issue,1405,Resolved
+Central Library Renovation,2026-10-31,M16,Design Mismatch,Scribe molding gap too wide,High,Installation,Procurement,Dave Wilson,Communication Failure,2368,Resolved
+Metro Tower Lobby,2026-06-13,M15,Assembly Error,Edge band peeling at corner,Critical,Case Work,Project Management,Ray Tilley,Vendor Issue,9887,Open
+Central Library Renovation,2026-10-08,M05,Shipping Damage,Melamine chip at cut edge,High,Millwork,Delivery,Dave Wilson,Vendor Issue,2462,Resolved
+Pinnacle Hotel Reception,2026-06-09,M14,Hardware Issue,Scribe molding gap too wide,High,Installation,Project Management,Mike Santos,Process Gap,2577,Open
+Summit Office Tower,2026-10-04,M04,Shipping Damage,Shelf pin holes 32mm off pattern,Medium,Delivery,Project Management,Tom Bauer,Process Gap,1445,Resolved
+Summit Office Tower,2026-06-05,M20,Documentation Error,Back panel bowing out,Critical,Installation,Millwork,Sarah Chen,Training Gap,2964,In Progress
+Summit Office Tower,2026-06-08,M01,Finish Quality,Veneer grain direction reversed,Low,Installation,Millwork,Ray Tilley,Material Issue,680,Resolved
+Summit Office Tower,2026-06-17,M05,Documentation Error,Wrong laminate applied to face,Low,Case Work,Programming,Tom Bauer,Equipment Malfunction,1202,Resolved
+Metro Tower Lobby,2026-06-16,M25,Assembly Error,"Panel width 1/4"" over spec",Medium,Project Management,Project Management,Amy Rodriguez,Process Gap,536,Open
+Riverside Medical Office,2026-11-06,M02,Finish Quality,Pull hardware bore spacing wrong,Medium,Edge Banding,Engineering,Dave Wilson,Material Issue,1377,Open
+Pinnacle Hotel Reception,2026-08-15,M23,Finish Quality,Soft close mechanism not engaging,Low,Engineering,Millwork,Dave Wilson,Human Error,735,Resolved
+Metro Tower Lobby,2026-06-23,M23,Design Mismatch,Back panel bowing out,High,Procurement,Engineering,Chris Davis,Equipment Malfunction,3374,Open
+Pinnacle Hotel Reception,2026-10-14,M28,Hardware Issue,Back panel bowing out,Medium,Case Work,Engineering,Tom Bauer,Communication Failure,981,Resolved
+Pinnacle Hotel Reception,2026-07-31,M22,Installation Issue,Drawer slide mounting holes misaligned,Medium,Case Work,Millwork,Karen Thompson,Material Issue,409,In Progress
+Metro Tower Lobby,2026-10-02,M21,Hardware Issue,"Panel width 1/4"" over spec",Medium,Installation,Engineering,Ray Tilley,Communication Failure,302,Open
+Heritage Bank Branch,2026-09-29,M18,Design Mismatch,Pull hardware bore spacing wrong,High,Installation,Installation,Dave Wilson,Training Gap,3525,Resolved
+Central Library Renovation,2026-09-25,M03,Material Defect,Crown molding profile wrong,Medium,Delivery,Procurement,Sarah Chen,Human Error,986,Open
+Riverside Medical Office,2026-09-21,M16,Documentation Error,Pull hardware bore spacing wrong,Low,Project Management,Estimating,Sarah Chen,Design Error,482,Open
+Riverside Medical Office,2026-08-22,M27,Assembly Error,Countertop seam visible,Critical,Installation,Procurement,Chris Davis,Design Error,8566,Resolved
+Metro Tower Lobby,2026-10-28,M25,Assembly Error,Melamine chip at cut edge,Low,Delivery,Project Management,Amy Rodriguez,Human Error,134,Resolved
+Central Library Renovation,2026-07-04,M29,Shipping Damage,"Panel width 1/4"" over spec",Low,Engineering,Project Management,Amy Rodriguez,Material Issue,769,Resolved
+Central Library Renovation,2026-08-05,M01,Assembly Error,European hinge cup depth off,Medium,Case Work,Engineering,Tom Bauer,Design Error,822,Open
+Metro Tower Lobby,2026-10-10,M29,Assembly Error,Pull hardware bore spacing wrong,Low,Delivery,Millwork,Karen Thompson,Training Gap,419,Resolved
+Pinnacle Hotel Reception,2026-06-08,M16,Assembly Error,Edge band peeling at corner,High,Millwork,Engineering,Lisa Park,Training Gap,3635,Resolved
+Riverside Medical Office,2026-10-20,M21,Dimensional Error,Base cabinet toe kick short,Medium,Installation,Case Work,Ray Tilley,Vendor Issue,353,Resolved
+Metro Tower Lobby,2026-07-11,M03,Documentation Error,Drawer slide mounting holes misaligned,Medium,Case Work,Programming,Lisa Park,Human Error,334,In Progress
+Metro Tower Lobby,2026-05-25,M12,Material Defect,Melamine chip at cut edge,Medium,Installation,Project Management,James Mitchell,Material Issue,248,In Progress
+Heritage Bank Branch,2026-09-09,M27,Installation Issue,Pull hardware bore spacing wrong,Medium,Millwork,Engineering,Dave Wilson,Process Gap,139,Open
+Summit Office Tower,2026-08-12,M25,Hardware Issue,Countertop seam visible,Critical,Edge Banding,Programming,Tom Bauer,Material Issue,9210,Resolved
+Pinnacle Hotel Reception,2026-11-05,M17,Dimensional Error,Shelf pin holes 32mm off pattern,Medium,Installation,Installation,Ray Tilley,Design Error,420,Resolved
+Central Library Renovation,2026-06-01,M06,Assembly Error,Back panel bowing out,Low,Installation,Project Management,Tom Bauer,Vendor Issue,119,Open
+Pinnacle Hotel Reception,2026-08-08,M13,Design Mismatch,Soft close mechanism not engaging,Low,Case Work,Procurement,Ray Tilley,Design Error,1125,Resolved
+Heritage Bank Branch,2026-07-13,M14,Shipping Damage,Veneer grain direction reversed,Low,Installation,Project Management,Tom Bauer,Human Error,149,In Progress
+Pinnacle Hotel Reception,2026-08-16,M27,Finish Quality,Pull hardware bore spacing wrong,Medium,Layup,Programming,Sarah Chen,Material Issue,182,Resolved
+Metro Tower Lobby,2026-09-11,M29,Assembly Error,Filler strip not flush,Medium,Installation,Millwork,James Mitchell,Process Gap,358,In Progress
+Heritage Bank Branch,2026-09-30,M14,Material Defect,Filler strip not flush,Critical,Delivery,Estimating,Karen Thompson,Communication Failure,5214,Open
+Heritage Bank Branch,2026-11-02,M24,Hardware Issue,Door overlay inconsistent,Medium,Layup,Installation,Ray Tilley,Equipment Malfunction,1425,Resolved
+Heritage Bank Branch,2026-09-11,M14,Hardware Issue,Base cabinet toe kick short,Medium,Case Work,Millwork,Sarah Chen,Equipment Malfunction,475,Resolved
+Heritage Bank Branch,2026-09-11,M29,Finish Quality,Hinge bore spacing off by 2mm,High,Installation,Case Work,Dave Wilson,Human Error,2632,Resolved
+Summit Office Tower,2026-05-17,M11,Design Mismatch,Shelf pin holes 32mm off pattern,Low,Millwork,CNC,Tom Bauer,Process Gap,777,Resolved
+Heritage Bank Branch,2026-07-07,M26,Shipping Damage,Filler strip not flush,High,Programming,Case Work,Amy Rodriguez,Vendor Issue,3565,Resolved
+Pinnacle Hotel Reception,2026-10-01,M02,Documentation Error,Melamine chip at cut edge,High,CNC,Project Management,Amy Rodriguez,Material Issue,1599,Resolved
+Metro Tower Lobby,2026-09-27,M08,Shipping Damage,Wrong laminate applied to face,High,Programming,Engineering,Dave Wilson,Vendor Issue,2201,In Progress
+Metro Tower Lobby,2026-09-01,M05,Installation Issue,Filler strip not flush,High,Engineering,Engineering,Tom Bauer,Communication Failure,1246,Resolved
+Summit Office Tower,2026-10-25,M07,Design Mismatch,"Panel width 1/4"" over spec",Medium,Millwork,Layup,Ray Tilley,Design Error,594,In Progress
+Heritage Bank Branch,2026-06-27,M20,Installation Issue,Drawer slide mounting holes misaligned,Medium,Delivery,Programming,Mike Santos,Vendor Issue,1184,In Progress
+Summit Office Tower,2026-11-05,M09,Finish Quality,"Panel width 1/4"" over spec",Low,Installation,Layup,Amy Rodriguez,Process Gap,150,Resolved
+Heritage Bank Branch,2026-06-28,M08,Material Defect,Edge band peeling at corner,High,Installation,Edge Banding,Karen Thompson,Design Error,3837,In Progress
+Heritage Bank Branch,2026-08-01,M05,Assembly Error,"Panel width 1/4"" over spec",Critical,CNC,Millwork,Ray Tilley,Human Error,2204,Resolved
+Riverside Medical Office,2026-06-05,M28,Documentation Error,"Panel width 1/4"" over spec",Medium,Layup,Engineering,Mike Santos,Equipment Malfunction,508,Resolved
+Pinnacle Hotel Reception,2026-06-05,M02,Assembly Error,Filler strip not flush,Low,Case Work,Millwork,Lisa Park,Design Error,1392,Resolved
+Pinnacle Hotel Reception,2026-07-17,M11,Assembly Error,European hinge cup depth off,Medium,Edge Banding,Millwork,Ray Tilley,Design Error,1004,Resolved
+Heritage Bank Branch,2026-08-30,M14,Dimensional Error,Drawer slide mounting holes misaligned,Medium,Case Work,Programming,Ray Tilley,Process Gap,1554,In Progress
+Summit Office Tower,2026-09-24,M03,Material Defect,Door overlay inconsistent,High,Millwork,Estimating,Ray Tilley,Human Error,1110,Open
+Summit Office Tower,2026-09-04,M29,Documentation Error,Edge band peeling at corner,High,Case Work,Estimating,Amy Rodriguez,Process Gap,4240,Open
+Metro Tower Lobby,2026-10-28,M18,Design Mismatch,Edge band peeling at corner,Medium,Programming,Engineering,James Mitchell,Vendor Issue,1127,Resolved
+Riverside Medical Office,2026-06-23,M30,Dimensional Error,Hinge bore spacing off by 2mm,High,Installation,Project Management,Amy Rodriguez,Communication Failure,745,Resolved
+Riverside Medical Office,2026-06-11,M12,Assembly Error,Scribe molding gap too wide,High,Edge Banding,Project Management,Tom Bauer,Communication Failure,2748,Open
+Heritage Bank Branch,2026-09-11,M26,Shipping Damage,Shelf pin holes 32mm off pattern,High,Engineering,Engineering,Chris Davis,Equipment Malfunction,1662,Open
+Riverside Medical Office,2026-10-26,M02,Assembly Error,Back panel bowing out,High,Case Work,Project Management,Amy Rodriguez,Communication Failure,4001,Open
+Heritage Bank Branch,2026-11-06,M17,Shipping Damage,Melamine chip at cut edge,Critical,Delivery,Programming,Amy Rodriguez,Equipment Malfunction,9838,Open
+Pinnacle Hotel Reception,2026-09-03,M01,Finish Quality,Shelf pin holes 32mm off pattern,Medium,Delivery,Case Work,James Mitchell,Process Gap,1512,Resolved
+Pinnacle Hotel Reception,2026-06-06,M21,Material Defect,Filler strip not flush,Medium,Delivery,Delivery,Mike Santos,Process Gap,1193,Open
+Riverside Medical Office,2026-08-21,M10,Material Defect,Door overlay inconsistent,High,Delivery,Programming,Karen Thompson,Training Gap,705,In Progress
+Metro Tower Lobby,2026-10-05,M11,Shipping Damage,Back panel bowing out,High,Installation,Millwork,Karen Thompson,Material Issue,1823,Resolved
+Heritage Bank Branch,2026-06-04,M29,Finish Quality,Scribe molding gap too wide,High,Millwork,Layup,Tom Bauer,Design Error,3327,Resolved
