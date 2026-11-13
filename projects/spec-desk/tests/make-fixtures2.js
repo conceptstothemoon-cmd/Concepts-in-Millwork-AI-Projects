@@ -69,6 +69,8 @@ function makeEstimate() {
     ['201', '201.03', 'Owner-furnished shelf standards, install only', '4', '0', '0', '0', '', '', 'No charge', '$0'],
     ['105', '105.01', 'Reception counter', '1', '10\'-0"', '42"', '30"', 'QZ-1', 'C4/A-458', '', '$9,800'],
     ['105', '105.02', 'Delivery drawer pedestal', '1', '15"', '28"', '24"', 'PL-1', '', '', '$700'],
+    ['112', '', 'Overhead cabinets, open shelving', '3', '3\'-0"', '30"', '12"', 'PL-1', '', 'No item number yet', '$1,500'],
+    ['', '', 'Overhead', '1', '', '', '', '', '', '', '$2,400'],
     ['110', '110.01', 'Workroom base cabinets', '2', '6\'-0"', '34 1/2"', '24"', 'PL-2', '', 'Not on any sheet read', '$4,100'],
     ['', '', 'Freight', '0', '0', '0', '0', '', '', '', '$0'],
     ['', '', 'Sales tax 8.25%', '1', '', '', '', '', '', '', '$1,980'],

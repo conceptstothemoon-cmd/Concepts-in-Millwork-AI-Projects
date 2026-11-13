@@ -39,6 +39,7 @@
         const ofull = other.replace(/^.*?\[O\d+\] [^:]*: /, ''), qword = (blk.match(/^C\d+: said "\w+": (\w+)/) || [])[1] || '';
         const otext = sentences(ofull).find(x => qword && x.toLowerCase().includes(qword.toLowerCase().slice(0, 6))) || ofull;
         const sn = new Set((WORDNUM(spec).match(/\d+(?:[.\/]\d+)?/g) || [])), on = (WORDNUM(otext).match(/\d+(?:[.\/]\d+)?/g) || []).filter(n => n.length < 4);
+        if (qword === 'Shelf') { checks.push({ id, verdict: 'wrong', status: 'gap', other: null, note: 'Planted: says gap although the shelf pin quote is in the proposal.' }); continue; }
         const conflict = said === 'match' && on.length && on.some(n => !sn.has(n));
         checks.push(conflict ? { id, verdict: 'wrong', status: 'conflict', other: { ref: oref, quote: first(otext, 8) }, note: 'Values differ once written-out numbers are read.' } : { id, verdict: 'right', status: said, other: null, note: 'Same on a second reading.' });
       }
@@ -88,7 +89,7 @@
         const excl = /exclud|not included|by others/i.test(hit.sen);
         const sn = new Set(nums(s.text)), on = nums(hit.sen);
         const same = on.length === 0 || on.every(n => sn.has(n));
-        items.push({ topic, status: excl ? 'exclusion' : same ? 'match' : 'conflict', spec: { ref: s.id, quote: first(s.text, 10) }, other: { ref: hit.o.id, quote: first(hit.sen, 12) }, note: `Spec: ${s.text.slice(0, 80)} / Other: ${hit.sen.slice(0, 80)}` });
+        items.push({ topic, status: excl ? 'exclusion' : same ? 'match' : 'conflict', spec: { ref: s.id, quote: first(s.text, 10) }, other: { ref: hit.o.id, quote: k === 'pull' ? 'Pulls: satin brass bar pulls furnished by owner' : first(hit.sen, 12) }, note: `Spec: ${s.text.slice(0, 80)} / Other: ${hit.sen.slice(0, 80)}` });
       }
       items.push({ topic: 'Field painting', status: 'extra', spec: null, other: { ref: O[O.length - 1].id, quote: 'Field painting excluded' }, note: 'Extra item.' });
       return { items };
@@ -113,6 +114,7 @@
         const src = blk.split('\n').slice(1).join(' ');
         const bad = nums(stmt).filter(n => !nums(src).includes(n));
         if (/source not found|no source cited/.test(src)) checks.push({ id, verdict: 'not_supported', fix: '', note: 'No source.' });
+        else if (/^Shelf Supports/.test(stmt)) checks.push({ id, verdict: 'partly', fix: 'Shelf Supports: 6 mm metal pin supports, 32 mm system spacing.', note: 'Planted: invents 6 mm.' });
         else if (bad.length) checks.push({ id, verdict: 'partly', fix: src.replace(/^\s*\[[RS]\d+\] [^:]*: /, '').trim(), note: `Source does not say ${bad.join(', ')}.` });
         else checks.push({ id, verdict: 'supported', fix: '', note: 'Matches.' });
       }
@@ -196,6 +198,7 @@
         const row = m[2];
         if (/Tall storage/.test(row)) checks.push({ id: m[1], verdict: 'not_on_sheet', fix: {}, evidence: [], note: 'No tall storage cabinet on this sheet.' });
         else if (/width: 12'-0"/.test(row) && /item: 201\.01/.test(row)) checks.push({ id: m[1], verdict: 'wrong', fix: { width: '11\'-11 1/2"' }, evidence: ['11\'-11 1/2"'], note: 'Width misread.' });
+        else if (!textless && /item: 201\.02/.test(row)) checks.push({ id: m[1], verdict: 'wrong', fix: { qty: '2' }, evidence: [], note: 'Planted: qty 2 with no evidence.' });
         else if (textless && /item: 201\.01/.test(row)) checks.push({ id: m[1], verdict: 'wrong', fix: { depth: '23 1/4"' }, evidence: [], note: 'Depth looks like 23 1/4" in the picture.' });
         else checks.push({ id: m[1], verdict: 'right', fix: {}, evidence: [], note: '' });
       }
