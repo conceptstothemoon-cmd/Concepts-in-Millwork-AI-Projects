@@ -1,6 +1,6 @@
-<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
-<title>Bid Screener Sandbox</title>
-<meta name="claude:viewport-fit-sides" content="cover">
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Bid Screener</title>
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=Domine:wght@600;700&display=swap">
 <style>
 /* Layout: one working column under a sticky tab bar; a detail drawer slides over the right side (full screen on phones). */
@@ -115,13 +115,20 @@ aside.drawer{position:fixed;top:0;right:0;bottom:0;width:min(640px,100%);backgro
 .fbitem.done{opacity:.6}
 @media (prefers-reduced-motion:no-preference){aside.drawer{animation:slide .18s ease-out}@keyframes slide{from{transform:translateX(24px);opacity:.6}}}
 @media (max-width:560px){.brand h1{font-size:19px}.bars .lab{width:84px}}
+.acct{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
 </style>
+<script src="vendor/msal-browser.min.js"></script>
+<script src="config.js"></script>
+<script src="sample-data.js"></script>
+<script src="m365.js"></script>
+</head><body>
 
 <header class="top">
   <div class="wrap">
     <div class="brand">
       <h1>Bid Screener <span style="font-size:.6em;vertical-align:middle;border:1px solid currentColor;border-radius:6px;padding:1px 6px">BETA</span></h1>
       <p>Beta for Sales and Estimating · not connected to email or Innergy yet · use “Suggest a change” to tell us what to fix</p>
+      <div class="acct" id="acct"></div>
     </div>
     <nav class="tabs" id="tabs" role="tablist" aria-label="Screens"></nav>
   </div>
@@ -262,7 +269,9 @@ function render(){
   if (S.tab === 'feedback') hydrateNames();
 }
 function storeNote(){
-  if (S.db === null) return `<p class="note">This page can’t load its information here. Open it from claude.ai while signed in to your company account.</p>`;
+  if (S.needSignIn) return `<div class="note" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center"><span>Sign in with your CIM Microsoft 365 account to load the GC list and invites.</span><button class="btn primary" type="button" data-act="signin">Sign in</button></div>`;
+  if (S.loadErr) return `<p class="note">The shared data couldn’t be loaded from SharePoint: ${esc(S.loadErr)}. Check that you have access to the Bid Screener SharePoint site, then reload the page.</p>`;
+  if (S.db === null) return `<div class="empty">Connecting…</div>`;
   if (!S.loaded.invites) return `<div class="empty">Loading…</div>`;
   return '';
 }
@@ -398,11 +407,11 @@ function showCard(id, focus){ setTimeout(() => { const c = document.getElementBy
 function viewTry(){
   const r = S.tryResult;
   return head('Check an invite', 'Add invites here. Paste one email to check it, or further down, add a whole batch of saved emails and PDFs at once.', ['Copy the whole invite email and paste it in the box below.', 'Press “Check this invite”.', 'Your result appears right below. Press “Add to Today’s invites” to keep it.'])
-  + (S.sample === null ? `<p class="note">Checking invites isn’t available in this view. The other screens still work.</p>` : '')
+  + (S.sample === null ? `<p class="note">${S.mode === 'demo' ? 'Checking invites is off in demo mode.' : 'Checking invites isn’t turned on yet (no Claude service set in config.js).'} The other screens still work.</p>` : '')
   + `<div class="card">
       <div class="field"><label for="try-text" style="font-size:14px">The invite email</label><textarea id="try-text" style="min-height:140px" placeholder="Paste the whole email here, including who it’s from">${esc(S.tryDraft||'')}</textarea></div>
       <div class="field"><label for="try-file" class="meta">Or choose one saved email (.eml) or invite PDF</label><input type="file" id="try-file" accept=".eml,.txt,.pdf,message/rfc822,application/pdf" data-act="emlfile"></div>
-      <div class="row"><button class="btn primary" type="button" data-act="screenit" style="font-size:17px;padding:10px 22px;min-height:46px" ${S.tryBusy||!S.sample?'disabled':''}>${S.tryBusy ? 'Reading it…' : 'Check this invite'}</button><span class="meta">The first time, you may be asked to allow Claude to read it.</span></div>
+      <div class="row"><button class="btn primary" type="button" data-act="screenit" style="font-size:17px;padding:10px 22px;min-height:46px" ${S.tryBusy||!S.sample?'disabled':''}>${S.tryBusy ? 'Reading it…' : 'Check this invite'}</button></div>
     </div>
     ${S.tryBusy ? `<section class="card" id="try-card" tabindex="-1" style="border:2px solid var(--accent)"><h2 style="font-size:20px">Your result</h2><p style="font-size:17px;font-weight:600;color:var(--accent);margin:0">Reading the invite. This usually takes 10 to 30 seconds.</p></section>` : ''}
     ${S.tryErr && !S.tryBusy ? `<section class="card" id="try-card" tabindex="-1" style="border:2px solid var(--decline)"><h2 style="font-size:20px">Your result</h2><p style="font-size:17px;margin:0">${esc(S.tryErr)}</p></section>` : ''}
@@ -537,9 +546,9 @@ function fbPanel(){
 
 /* ---------- Writes ---------- */
 async function write(fn, okMsg){
-  if (!S.db){ toast('Changes can’t be saved in this view.'); return; }
+  if (!S.db){ toast(S.needSignIn ? 'Sign in to save changes.' : 'Changes can’t be saved right now.'); return; }
   try { await fn(); if (okMsg) toast(okMsg); }
-  catch (e) { toast(e && e.code === 'quota_exceeded' ? 'Storage is full. Erase some clicks on the Accuracy screen.' : 'That didn’t save. Try again in a moment.'); }
+  catch (e) { toast(e && e.code === 'not_granted' ? 'That didn’t save: your account can’t edit the SharePoint list.' : e && e.code === 'too_large' ? 'That didn’t save: it’s too large.' : 'That didn’t save. Try again in a moment.'); }
 }
 const by = () => S.me || null;
 function decide(id, decision){
@@ -607,14 +616,14 @@ async function screenPasted(){
   try {
     const r = await readInvite(text); r.source = 'pasted'; S.tryResult = r;
   } catch (e) {
-    S.tryErr = ({not_granted:'Asking Claude wasn’t allowed in this view.', rate_limited:'Too many requests right now. Wait a minute, then try again.', invalid_json:'Claude’s answer couldn’t be read. Try again, or paste less text.', prompt_too_large:'That email is too long. Paste just the invite part.'})[e && e.code] || 'Something went wrong reading the invite. Try again.';
+    S.tryErr = ({not_granted:'Your sign-in wasn’t accepted by the Claude service. Sign out and back in, then try again.', refused:'Claude declined to read this one.', network:'Couldn’t reach the Claude service. Check your connection and try again.', rate_limited:'Too many requests right now. Wait a minute, then try again.', invalid_json:'Claude’s answer couldn’t be read. Try again, or paste less text.', prompt_too_large:'That email is too long. Paste just the invite part.'})[e && e.code] || 'Something went wrong reading the invite. Try again.';
   } finally { S.tryBusy = false; render(); showCard('try-card', true); }
 }
 
 /* ---------- Estimating history: data model ---------- */
 const EST_COLS = ['section','location','name','count','qty','uom','draftHrs','fabHrs','installHrs','draftCost','materialCost','fabCost','installCost','totalCost','margin','draftPrice','fabPrice','installPrice','totalPrice'];
 const EST_STATUS = ['Budget','Bid submitted','Won','Lost','Not bid'];
-const EST_CHUNK = 700;
+const EST_CHUNK = 100; // rows per saved item; keeps each SharePoint item under its size limit
 const FAMILY = {PL:'Plastic laminate', SS:'Solid surface', QZ:'Quartz', MB:'Metal', WD:'Wood', WV:'Wood veneer', SSM:'Solid surface', GL:'Glass'};
 function catOf(name){
   const n = String(name||'').toLowerCase();
@@ -738,18 +747,18 @@ Rules:
     const {text} = await S.sample(input, {signal:ctl.signal, tools:useTools ? tools : undefined, cache:false, onText:({text}) => { S.askLive = text; const el = document.getElementById('ask-live'); if (el) el.textContent = text; }});
     S.askLog.unshift({q, a:text, trace:S.askTrace.map(x => x.tool)});
   } catch (e) {
-    const msg = e && e.code === 'cancelled' ? 'You stopped this answer. Press “Get answer” to try again.' : ({not_granted:'Answers aren’t allowed in this view, so this question couldn’t be answered.', rate_limited:'Too many questions at once. Wait a minute, then press “Get answer” again.'})[e && e.code] || 'Something went wrong while answering. Press “Get answer” to try again.';
+    const msg = e && e.code === 'cancelled' ? 'You stopped this answer. Press “Get answer” to try again.' : ({not_granted:'Your sign-in wasn’t accepted by the Claude service. Sign out and back in, then try again.', refused:'Claude declined to answer this one.', network:'Couldn’t reach the Claude service. Check your connection and try again.', rate_limited:'Too many questions at once. Wait a minute, then press “Get answer” again.'})[e && e.code] || 'Something went wrong while answering. Press “Get answer” to try again.';
     S.askLog.unshift({q, a:(e && e.text ? e.text + '\n\n' : '') + msg, trace:[], err:true, rated:true}); S.askErr = '';
   } finally { S.askBusy = false; S.askCtl = null; S.askLive = ''; render(); showAnswer(true); }
 }
 function viewAsk(){
   const est = estList(); const latest = !S.askBusy && S.askLog[0]; const older = S.askBusy ? S.askLog : S.askLog.slice(1);
   return head('Ask a question','Type a question about bid invites, general contractors or past estimates, then press “Get answer”. Your answer appears right below the box.')
-  + (S.sample === null ? `<p class="note">Answers aren’t available in this view.</p>` : '')
+  + (S.sample === null ? `<p class="note">${S.mode === 'demo' ? 'Answers are off in demo mode.' : 'Answers aren’t turned on yet (no Claude service set in config.js).'}</p>` : '')
   + `<form class="card" data-act="askform">
       <div class="field"><label for="ask-q" style="font-size:14px">Your question</label><textarea id="ask-q" style="min-height:96px;font-size:17px" placeholder="Type your question here">${esc(S.askDraft||'')}</textarea></div>
       <div class="row"><button class="btn primary" type="submit" style="font-size:17px;padding:10px 22px;min-height:46px" ${S.askBusy||!S.sample?'disabled':''}>${S.askBusy ? 'Working on it…' : 'Get answer'}</button>
-      <span class="meta">The first time, you may be asked to allow Claude to answer.</span></div>
+      </div>
     </form>
     ${S.askBusy ? `<section class="card" id="answer-card" tabindex="-1" style="border:2px solid var(--accent);gap:12px">
         <h2 style="font-size:20px">Your answer</h2>
@@ -777,11 +786,11 @@ function unitTable(){
   <div class="tablebox"><table><thead><tr><th>Item type</th><th>LF lines</th><th>SF lines</th><th>EA lines</th></tr></thead><tbody>${[...m.entries()].sort((a,b)=>a[0].localeCompare(b[0])).map(([k,a]) => `<tr><td>${esc(k)}</td><td class="num">${a.LF}</td><td class="num">${a.SF}</td><td class="num">${a.EA}</td></tr>`).join('')}</tbody></table></div></details>`;
 }
 function viewEstimates(){
-  const note = S.db === null ? `<p class="note">Shared saving isn’t available in this view, so estimates can’t be stored here.</p>` : '';
+  const note = S.db === null ? `<p class="note">Sign in to save estimates.</p>` : '';
   const up = S.estUpload; const list = estList(); const segs = settings().segments.map(s => s.name);
   return head('Past estimates','Save estimates exported from Innergy here, then ask questions about them on “Ask a question”.', ['Export an estimate from Innergy as an Excel file.', 'Below, press the button to choose that file.', 'Check the project name, date and type, then press “Save estimate”.', 'Go to “5. Ask a question” to ask about it.'])
   + note
-  + `<p class="note">Only people this page is shared with at your company can see these estimates. Check with IT before loading the full estimate history.</p>
+  + `<p class="note">${S.mode === 'demo' ? 'Demo mode: estimates are saved only in this browser.' : 'Anyone with access to the Bid Screener SharePoint site can see these estimates.'} Check with IT before loading the full estimate history.</p>
     <div class="card"><h3>Add an estimate</h3>
       <div class="field"><label for="est-file">Choose the Innergy export file (.xlsx or .csv)</label><input type="file" id="est-file" accept=".xlsx,.xls,.csv" data-act="estfile"></div>
       ${S.estErr ? `<p class="checktext">${esc(S.estErr)}</p>` : ''}
@@ -897,7 +906,7 @@ async function bulkInvites(files, where){
   where = where || 'try';
   files = [...files].filter(f => /\.(eml|txt|pdf)$/i.test(f.name)).slice(0, 25);
   if (!files.length){ toast('Choose .eml, .pdf or .txt files.'); return; }
-  if (!S.sample || !S.db){ toast('Adding invites needs the online version on claude.ai.'); return; }
+  if (!S.sample || !S.db){ toast(S.mode === 'demo' ? 'Adding invites is off in demo mode.' : 'Reading invites isn’t turned on yet.'); return; }
   S.bulk = {where, total:files.length, done:0, current:'', added:[], skipped:[], failed:[], busy:true}; render(); showCard(where + '-bulk-card');
   for (const f of files){
     S.bulk.current = f.name; render();
@@ -921,14 +930,14 @@ async function bulkInvites(files, where){
   const fi = document.getElementById(where + '-bulk-file'); if (fi) fi.value = '';
 }
 function inviteErr(e){
-  return ({not_granted:'Claude wasn’t allowed to read it in this view.', rate_limited:'Too many requests right now. Wait a minute, then try this one again.', invalid_json:'Claude couldn’t find a bid invite in it.', prompt_too_large:'The file is too long.', quota_exceeded:'Storage is full.'})[e && e.code] || (e && e.message) || 'Something went wrong reading it.';
+  return ({not_granted:'Your sign-in wasn’t accepted by the Claude service.', refused:'Claude declined to read it.', network:'Couldn’t reach the Claude service.', rate_limited:'Too many requests right now. Wait a minute, then try this one again.', invalid_json:'Claude couldn’t find a bid invite in it.', prompt_too_large:'The file is too long.', quota_exceeded:'Storage is full.'})[e && e.code] || (e && e.message) || 'Something went wrong reading it.';
 }
 function bulkCard(where){
   where = where || 'try'; const b = S.bulk && S.bulk.where === where ? S.bulk : null; const home = where === 'home';
   const intro = `<h3>${home ? 'Add new invites' : 'Add several invites at once'}</h3>
       <p class="meta" style="margin:0">Save invite emails from Outlook (drag them from your inbox to your desktop) or save invite PDFs, then choose them here. You can pick several at once, up to 25. ${home ? 'To paste an email instead, use “2. Check an invite”.' : 'Each one is read and added to “Today’s invites”.'}</p>
       <div class="field"><label for="${where}-bulk-file">Choose invite files (.eml, .pdf or .txt)</label><input type="file" id="${where}-bulk-file" multiple accept=".eml,.pdf,.txt,message/rfc822,application/pdf" data-act="bulkfiles" data-where="${where}" ${S.bulk && S.bulk.busy || !S.sample ? 'disabled' : ''}></div>
-      ${!S.sample && S.sample !== undefined && home ? '<p class="meta" style="margin:0">Adding invites needs the online version on claude.ai.</p>' : ''}`;
+      ${!S.sample && S.sample !== undefined && home ? `<p class="meta" style="margin:0">${S.mode === 'demo' ? 'Adding invites is off in demo mode. Connect the page to Microsoft 365 and the Claude service (see setup/SETUP.md) to turn it on.' : 'Reading invites isn’t turned on yet (no Claude service set in config.js).'}</p>` : ''}`;
   if (!b) return `<div class="card" id="${where}-bulk-card"${home ? ' style="border:2px solid var(--accent)"' : ''}>${intro}</div>`;
   const list = (xs, label, cls) => xs.length ? `<div><b>${label} (${xs.length})</b><ul style="margin:4px 0 0;padding-left:20px">${xs.map(x => `<li>${esc(x.project || x.name)}${x.msg ? ` <span class="${cls}">: ${esc(x.msg)}</span>` : x.project ? ` <span class="meta">(${esc(x.name)})</span>` : ''}</li>`).join('')}</ul></div>` : '';
   return `<div class="card" id="${where}-bulk-card" tabindex="-1" style="border:2px solid var(--accent);gap:10px">${intro}
@@ -1067,6 +1076,9 @@ document.addEventListener('click', e => {
   else if (a === 'archhandled') setArchived(activeInvites().filter(i => S.decisions.has(i.id)).map(i => i.id), true);
   else if (a === 'gcimportyes') applyGcImport();
   else if (a === 'gcimportno'){ S.gcImport = null; S.gcImportErr = ''; const fi = $('#gc-file'); if (fi) fi.value = ''; render(); }
+  else if (a === 'signin'){ S.conn && S.conn.signIn && S.conn.signIn(); }
+  else if (a === 'signout'){ S.conn && S.conn.signOut && S.conn.signOut(); }
+  else if (a === 'resetdemo'){ S.conn && S.conn.resetDemo && S.conn.resetDemo(); }
   else if (a === 'screenit') screenPasted();
   else if (a === 'cleartry'){ S.tryResult = null; S.tryDraft = ''; S.tryErr=''; render(); }
   else if (a === 'addtry'){ const r = S.tryResult; if (!r) return; const nid = 'pasted-' + Date.now(); S.invites.set(nid, r); S.tryResult = null; S.tryDraft=''; render(); write(() => S.db.doc('invites/' + nid).set({...r, addedBy:by(), received: r.received || today()}), 'Added to Today’s invites.'); }
@@ -1130,18 +1142,28 @@ document.addEventListener('submit', e => {
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape'){ if (S.fbOpen){ S.fbOpen = false; renderOverlay(); } else if (S.openId){ S.openId = null; renderOverlay(); } } });
 
-/* ---------- Boot ---------- */
+/* ---------- Boot: connect to Microsoft 365 (or demo mode), then listen for data ---------- */
+function renderAcct(){
+  const el = $('#acct'); const c = S.conn; if (!el) return;
+  if (!c) { el.innerHTML = ''; return; }
+  if (c.mode === 'demo') el.innerHTML = '<span class="chip sample">DEMO MODE</span><span>Made-up examples, saved only in this browser.</span><button class="btn ghost" type="button" data-act="resetdemo">Reset examples</button>';
+  else if (!c.signedIn) el.innerHTML = '<button class="btn primary" type="button" data-act="signin">Sign in with Microsoft 365</button>';
+  else el.innerHTML = `<span>Signed in as ${esc(c.account.name)}</span>${c.sample ? '' : '<span class="chip">Claude features off</span>'}<button class="btn ghost" type="button" data-act="signout">Sign out</button>`;
+}
 render();
 (async () => {
-  const cl = window.claude;
-  if (!cl || !cl.use){ S.db = null; render(); return; }
-  const [db, user, sample] = await Promise.all([cl.use('db'), cl.use('user'), cl.use('sample')]);
-  S.db = db; S.user = user; S.sample = sample;
-  if (user){ try { S.me = await user.id(); } catch (e) {} }
-  if (!db){ render(); return; }
+  let c;
+  try { c = await window.BS.connect(); }
+  catch (e) { S.loadErr = (e && e.message) || 'Sign-in failed'; S.db = null; render(); return; }
+  S.conn = c; S.mode = c.mode; renderAcct();
+  if (!c.db){ S.needSignIn = true; S.db = null; render(); return; }
+  S.db = c.db; S.user = c.user; S.sample = c.sample;
+  try { S.me = await c.user.id(); } catch (e) {}
+  const db = c.db;
+  const failed = e => { S.loadErr = (e && e.message) || 'Unknown error'; render(); };
   const coll = (name, key, after) => db.collection(name).onSnapshot(snap => {
-    const m = new Map(); for (const d of snap.docs) m.set(d.id, {...d.data()}); S[key] = m; if (after) after(); render();
-  }, () => render());
+    const m = new Map(); for (const d of snap.docs) m.set(d.id, {...d.data()}); S[key] = m; if (after) after(); S.loadErr = ''; render();
+  }, failed);
   coll('gcs', 'gcs', () => S.loaded.gcs = true);
   coll('invites', 'invites', () => S.loaded.invites = true);
   coll('decisions', 'decisions');
@@ -1149,6 +1171,7 @@ render();
   coll('estimates', 'estimates');
   coll('estrows', 'estRows');
   db.doc('settings/criteria').onSnapshot(d => { if (d.exists) S.settings = {...d.data()}; render(); }, () => {});
+  if (c.start) c.start();
 })();
 })();
 </script>

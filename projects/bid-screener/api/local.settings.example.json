@@ -1,0 +1,12 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "FUNCTIONS_WORKER_RUNTIME": "node",
+    "AzureWebJobsStorage": "",
+    "ANTHROPIC_API_KEY": "put-the-key-here-never-commit-it",
+    "TENANT_ID": "<Directory (tenant) ID>",
+    "CLIENT_ID": "<Application (client) ID of CIM Bid Screener>",
+    "CLAUDE_MODEL": "claude-opus-5-5"
+  },
+  "Host": { "CORS": "http://localhost:3000" }
+}

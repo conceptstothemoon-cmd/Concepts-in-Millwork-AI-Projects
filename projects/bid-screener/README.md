@@ -10,15 +10,44 @@ Screens incoming bid invitations for Sales and Estimating. Each invite gets a su
 - **Ask a question:** plain-language questions about invites, GCs and past estimates, answered only from the saved data.
 - **Archive, GC list, Rules, Accuracy, Suggestions:** set GC tiers (Top, Mid, Low, Watch, Do Not Bid), choose which warnings show, see how often suggestions match what the team actually did, and collect feedback.
 
-## Open it
-The working version runs as a claude.ai artifact, because it uses the artifact's shared database (GC list, invites, decisions, estimates), Claude (to read invites and answer questions) and sign-in (to show who made a suggestion). Open it from claude.ai while signed in to the company account.
+## Two modes
 
-`index.html` here is the source of that artifact. Opened directly or on GitHub Pages it shows the layout, but it can't load or save data and can't read invites; it shows a note saying so. Hooking it up outside claude.ai would mean replacing the `window.claude` calls in the **Boot** block at the bottom of the script with a real database and the Claude API.
+| | Demo mode (default) | Live mode |
+|---|---|---|
+| Turned on by | `clientId` blank in `config.js` | `config.js` filled in (see [setup/SETUP.md](setup/SETUP.md)) |
+| Data | Made-up examples, saved only in this browser | One SharePoint list in CIM's Microsoft 365, shared by everyone |
+| Sign-in | None | Microsoft 365 work account |
+| Reading invites, Ask a question | Off | On, through the Claude service (Azure Function in `api/`) |
 
-## GC list template
-`gc-list-template.csv` has the columns the **GC list → Import** screen expects: `GC name`, `Tier`, `Other names`, `Email domains`, `Notes`. Fill it in and import it; GCs already on the list are updated, not duplicated.
+**Live site (demo mode until set up):** <https://conceptstothemoon-cmd.github.io/Concepts-in-Millwork-AI-Projects/projects/bid-screener/>
+
+## Run it on your PC
+
+Microsoft sign-in needs `https://` or `http://localhost`, so serve the folder instead of double-clicking `index.html`:
+
+```bash
+npx serve -l 3000 .
+```
+
+Then open <http://localhost:3000/>. (`python3 -m http.server 3000` works too.)
+
+## Folder guide
+
+```
+index.html                 the page: all screens, screening rules and warnings
+config.js                  demo vs live settings: the only file to edit when going live
+m365.js                    Microsoft 365 sign-in, SharePoint storage, and calls to the Claude service
+sample-data.js             made-up examples for demo mode
+vendor/                    Microsoft's sign-in library (MSAL 4.30.0), stored here so it doesn't load from a CDN
+gc-list-template.csv       columns the GC list import expects
+api/                       Azure Function that holds the Claude API key and forwards requests to Claude
+setup/SETUP.md             step-by-step setup for IT: SharePoint, Entra ID, Azure Function, costs
+setup/Create-BidScreenerList.ps1   creates the SharePoint list
+```
 
 ## How it's built
-- One `index.html`: one `<style>`, one `<script>`, no build step. Libraries from cdnjs: SheetJS 0.18.5, and pdf.js 3.11.174 (loaded only when a PDF is added).
-- The screening rule is in `screen()`; warnings are in `flagsFor()`; default settings are in `DEFAULT_SETTINGS`.
-- Shared data collections: `gcs`, `invites`, `decisions`, `feedback`, `estimates`, `estrows`, and `settings/criteria`.
+- Plain HTML/CSS/JavaScript, no build step. Libraries from cdnjs: SheetJS 0.18.5, and pdf.js 3.11.174 (loaded only when a PDF is added).
+- The screening rule is `screen()` in `index.html`; the warnings are `flagsFor()`; default settings are `DEFAULT_SETTINGS`.
+- Data is grouped in collections (`gcs`, `invites`, `decisions`, `feedback`, `estimates`, `estrows`, `settings`). In live mode each document is one row of the SharePoint list: `Title` is `collection/id` and `DocData` holds the document as JSON. Each open page checks for changes every 45 seconds (`refreshSeconds`) and whenever the tab comes back into view.
+- Claude: the page sends the conversation to `api/` with the person's Microsoft 365 token; the function checks the token, adds the API key, and calls Claude Opus 5.5 (`claude-opus-5-5`). For "Ask a question", Claude asks the page for data through tools (list estimates, summarize lines, room costs, list invites, look up a GC), and the page answers from what it has loaded.
+- First built as a claude.ai artifact; this version replaces the claude.ai storage and sign-in with Microsoft 365.
