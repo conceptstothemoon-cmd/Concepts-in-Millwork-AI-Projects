@@ -41,6 +41,13 @@ body{margin:0; height:100%; background:var(--bg); color:var(--ink);
 button,input,select,textarea{font:inherit; color:inherit}
 :focus-visible{outline:2px solid var(--focus); outline-offset:2px}
 [hidden]{display:none !important}
+.split-sz{display:inline-flex; gap:.3rem; align-items:center}
+.split-sz select{font-size:.85rem; padding:.2rem; border:1px solid var(--line); border-radius:4px; background:var(--surface)}
+.chk-log{margin:.5rem 0 .8rem; padding:.45rem .7rem; border-left:3px solid var(--ok); background:var(--sunk); border-radius:3px; font-size:.9rem}
+.chk-log summary{cursor:pointer}
+.chk-log ol{margin:.4rem 0 0; padding-left:1.4rem}
+.chk-note{margin:.15rem 0 .35rem; font-size:.88rem}
+.chk-run{border-left:3px solid var(--blue); padding-left:.6rem}
 
 .app{height:100%; display:grid; grid-template-columns:310px minmax(0,1fr); grid-template-rows:auto minmax(0,1fr)}
 body.no-doc .app{grid-template-columns:minmax(0,1fr)}
@@ -314,6 +321,7 @@ i.pc{cursor:default}
     <div class="bar-actions">
       <button class="btn ghost small need-doc need-dl" id="btnIndex">Save index (CSV)</button>
       <button class="btn ghost small need-doc need-dl" id="btnZip">Save all sections (ZIP)</button>
+      <span class="need-doc need-dl split-sz"><button class="btn ghost small" id="btnSplitSize">Split by size (ZIP)</button><select id="splitMb" aria-label="Largest part size"><option value="10">under 10 MB</option><option value="25" selected>under 25 MB</option><option value="50">under 50 MB</option><option value="100">under 100 MB</option></select></span>
       <label class="btn small need-doc" for="fileInput">Open spec book</label>
     </div>
     <input type="file" id="fileInput" accept="application/pdf,.pdf" hidden>
@@ -907,12 +915,13 @@ function renderSummary(sum) {
   const bad = sum.points.reduce((n, p) => n + (p.citations || []).filter(c => { const t = specResolver(c.ref); return !t || !verifyQuote(c.quote, t.text); }).length, 0);
   return `<div class="answer"><h2>Summary with sources</h2>
     <p class="note">${plural(sum.points.length, 'point')} from ${plural(sum.chunks, 'pass', 'passes')} over every paragraph in this section.${bad ? ` <span class="vbad">${plural(bad, 'quote')} couldn’t be matched to the source text and ${bad === 1 ? 'is' : 'are'} marked below.</span>` : ' Every quote was matched to the source text.'}</p>
-    ${cats.map(c => `<div class="cat">${esc(c)}</div>` + byCat.get(c).map(p => `<div class="pt"><p>${esc(p.statement)}${newBadge(p.round)}${chkBadge(p.chk)}</p>${(p.citations || []).map(ci => citeHtml(ci, specResolver)).join('<br>')}</div>`).join('')).join('')}
+    ${checkLogHtml(sum.check, sum.points)}
+    ${cats.map(c => `<div class="cat">${esc(c)}</div>` + byCat.get(c).map(p => `<div class="pt"><p>${esc(p.statement)}${newBadge(p.round)}${chkBadge(p.chk)}</p>${chkNote(p.chk)}${(p.citations || []).map(ci => citeHtml(ci, specResolver)).join('<br>')}</div>`).join('')).join('')}
   </div>`;
 }
 
 let sumCtl = null;
-async function summarizeSection(s) {
+async function summarizeSection(s, opt = {}) {
   if (!caps.sample) return;
   const chunks = chunkRecords(s.records, 45000);
   const sum = { points: [], chunks: chunks.length, running: 'Starting…' };
@@ -941,6 +950,13 @@ ${passages}`;
       const out = await caps.sample.json(prompt, { signal: sumCtl.signal, modelTier: 'default' });
       if (out && Array.isArray(out.points)) sum.points.push(...out.points.filter(p => p && p.statement));
     }
+    if (!opt.noCheck) sum.check = await autoCheck(`the summary of ${s.num}`, sumCtl.signal, t => { sum.running = t; draw(); }, async round => {
+      const say = t => { sum.running = t; draw(); };
+      const h = await huntSection(s, sum, round, sumCtl.signal, say);
+      const v = await verifyStatements(sum.points.filter(needsCheck).map(p => ({ p })), round, sumCtl.signal, say);
+      return { added: h.added, changed: v.changed, confirmed: v.confirmed, calls: h.calls + v.calls,
+        notes: [h.added ? `found ${plural(h.added, 'requirement')} the summary missed` : 'nothing missing', v.checked ? `checked ${plural(v.checked, 'statement')} against the spec: ${v.confirmed} confirmed, ${v.changed} corrected or flagged` : ''] };
+    });
     delete sum.running;
   } catch (e) {
     delete sum.running;
@@ -1037,20 +1053,51 @@ Passages:
 ${picked.map(r => passageLine(r, 'R' + r.rid)).join('\n')}`;
   try {
     const res = await caps.sample.json(prompt, { signal: askCtl.signal, modelTier: 'default' });
-    const pts = Array.isArray(res?.points) ? res.points : [];
-    out.innerHTML = `<div class="answer">
-      <h2>Answer</h2>
-      <p class="lead">${esc(res?.answer || '')}</p>
-      ${pts.map(p => `<div class="pt"><p>${esc(p.statement)}</p>${(p.citations || []).map(c => citeHtml(c, specResolver)).join('<br>')}</div>`).join('')}
-      ${res?.not_found ? `<div class="warn"><b>Not covered by what was read:</b> ${esc(res.not_found)}</div>` : ''}
-      <details class="read"><summary>Show the ${plural(picked.length, 'paragraph')} Claude read</summary><ul>${picked.map(r => `<li><button class="ref" data-rid="${r.rid}">${esc(state.secMap.get(r.sec).num + ' ' + (r.label || ''))}, p. ${r.page}</button> ${esc(r.text.slice(0, 140))}${r.text.length > 140 ? '…' : ''}</li>`).join('')}</ul></details>
-      ${!scope ? `<p class="note">Searched the whole book by keyword and read the ${plural(picked.length, 'best-matching paragraph')}. For a complete answer on one topic, pick its section in “Search in”.</p>` : ''}
-    </div>`;
+    const ans = state.ask = { q, scope, picked, answer: res?.answer || '', not_found: res?.not_found || '', points: (Array.isArray(res?.points) ? res.points : []).filter(p => p && p.statement).map(p => ({ statement: String(p.statement), citations: Array.isArray(p.citations) ? p.citations : [] })) };
+    drawAsk(ans);
+    ans.check = await autoCheck('the answer', askCtl.signal, t => drawAsk(ans, t), async round => {
+      const say = t => drawAsk(ans, t);
+      say(`Round ${round}: reading the paragraphs again for anything the answer missed`);
+      const out = await caps.sample.json(`You are double-checking an answer to a question about a construction specification. Read every passage again and list ONLY points the answer is missing or gets wrong. Keep values, units, standards and product names exactly as written. Every point must cite a passage id with an exact quote (5 to 25 words). If nothing is missing, return an empty list; don't repeat what's already there.
+
+Reply with only JSON: {"missing":[{"statement":"...","citations":[{"ref":"R12","quote":"exact words"}]}]}
+
+Question: ${q}
+
+ANSWER SO FAR:
+${ans.answer}
+${ans.points.map(p => '- ' + p.statement).join('\n')}
+
+Passages:
+${picked.map(r => passageLine(r, 'R' + r.rid)).join('\n')}`, { signal: askCtl.signal, modelTier: 'default' });
+      let added = 0;
+      for (const p of (out && Array.isArray(out.missing) ? out.missing : [])) {
+        if (!p || !p.statement || ans.points.some(x => similar(x.statement, p.statement) > 0.8 || (x.chk && x.chk.was && similar(x.chk.was, p.statement) > 0.8))) continue;
+        ans.points.push({ statement: String(p.statement), citations: Array.isArray(p.citations) ? p.citations : [], round }); added++;
+      }
+      const v = await verifyStatements(ans.points.filter(needsCheck).map(p => ({ p })), round, askCtl.signal, say);
+      return { added, changed: v.changed, confirmed: v.confirmed, calls: 1 + v.calls,
+        notes: [added ? `found ${plural(added, 'point')} the answer missed` : 'nothing missing', v.checked ? `checked ${plural(v.checked, 'statement')} against the spec: ${v.confirmed} confirmed, ${v.changed} corrected or flagged` : ''] };
+    });
+    drawAsk(ans);
   } catch (e) {
     out.innerHTML = `<div class="warn">${errCopy(e)}</div>`;
   } finally {
     $('#askGo').disabled = false; $('#askStop').hidden = true;
   }
+}
+function drawAsk(ans, checking) {
+  const out = $('#askOut'); if (!out) return;
+  const { picked, scope } = ans;
+  out.innerHTML = `<div class="answer">
+      <h2>Answer</h2>
+      <p class="lead">${esc(ans.answer)}</p>
+      ${checking ? `<p class="note chk-run">${esc(checking)}</p>` : checkLogHtml(ans.check, ans.points)}
+      ${ans.points.map(p => `<div class="pt"><p>${esc(p.statement)}${newBadge(p.round)}${chkBadge(p.chk)}</p>${chkNote(p.chk)}${(p.citations || []).map(c => citeHtml(c, specResolver)).join('<br>')}</div>`).join('')}
+      ${ans.not_found ? `<div class="warn"><b>Not covered by what was read:</b> ${esc(ans.not_found)}</div>` : ''}
+      <details class="read"><summary>Show the ${plural(picked.length, 'paragraph')} Claude read</summary><ul>${picked.map(r => `<li><button class="ref" data-rid="${r.rid}">${esc(state.secMap.get(r.sec).num + ' ' + (r.label || ''))}, p. ${r.page}</button> ${esc(r.text.slice(0, 140))}${r.text.length > 140 ? '…' : ''}</li>`).join('')}</ul></details>
+      ${!scope ? `<p class="note">Searched the whole book by keyword and read the ${plural(picked.length, 'best-matching paragraph')}. For a complete answer on one topic, pick its section in “Search in”.</p>` : ''}
+    </div>`;
 }
 function pickByScore(scored, limit) {
   const out = []; let n = 0;
@@ -1186,27 +1233,10 @@ function otherPassagesFor(text) {
   return { list: out.sort((a, b) => a.i - b.i), all: false };
 }
 
-async function runCompare() {
-  if (!caps.sample) return;
-  const status = $('#cmpStatus');
-  if (!state.other || !state.other.chunks.length) { status.innerHTML = '<span class="err">Load the other document first.</span>'; return; }
-  if (!state.picked.size) { status.innerHTML = '<span class="err">Select at least one spec section.</span>'; return; }
-  const secs = state.sections.filter(s => state.picked.has(s.key));
-  const jobs = [];
-  for (const s of secs) { const ch = chunkRecords(s.records, 30000); ch.forEach((c, i) => jobs.push({ s, recs: c, part: i + 1, of: ch.length })); }
-  state.cmpItems = []; state.cmpFilter = 'all';
-  cmpCtl = new AbortController();
-  $('#cmpGo').disabled = true; $('#cmpStop').hidden = false; $('#cmpCsv').hidden = true;
-  let partial = 0;
-  try {
-    for (let j = 0; j < jobs.length; j++) {
-      const { s, recs, part, of } = jobs[j];
-      status.textContent = `Checking ${s.num} ${s.title}${of > 1 ? ` (part ${part} of ${of})` : ''}. Request ${j + 1} of ${jobs.length}.`;
-      const specText = recs.map(r => passageLine(r, 'S' + r.rid)).join('\n');
-      const op = otherPassagesFor(recs.map(r => r.text).join(' ') + ' ' + s.title);
-      if (!op.all) partial++;
-      const kind = state.other.kindLabel.toLowerCase();
-      const prompt = `Compare a construction specification section against a ${kind}. Use ONLY the passages below. Spec passages have ids starting with S; ${kind} passages have ids starting with O.
+function cmpPrompt(s, recs, part, of, op, extra) {
+  const specText = recs.map(r => passageLine(r, 'S' + r.rid)).join('\n');
+  const kind = state.other.kindLabel.toLowerCase();
+  return `Compare a construction specification section against a ${kind}. Use ONLY the passages below. Spec passages have ids starting with S; ${kind} passages have ids starting with O.
 
 For each distinct requirement in the spec passages, decide its status:
 - "match": the ${kind} states it consistently.
@@ -1229,17 +1259,119 @@ Spec passages:
 ${specText}
 
 ${state.other.kindLabel} passages (${state.other.name}):
-${op.list.map(c => `[O${c.i}] (${c.where || (c.page ? 'p. ' + c.page : 'paragraph ' + (c.i + 1))}) ${c.text}`).join('\n')}`;
+${op.list.map(c => `[O${c.i}] (${c.where || (c.page ? 'p. ' + c.page : 'paragraph ' + (c.i + 1))}) ${c.text}`).join('\n')}${extra ? '\n' + extra : ''}`;
+}
+async function runCompare() {
+  if (!caps.sample) return;
+  const status = $('#cmpStatus');
+  if (!state.other || !state.other.chunks.length) { status.innerHTML = '<span class="err">Load the other document first.</span>'; return; }
+  if (!state.picked.size) { status.innerHTML = '<span class="err">Select at least one spec section.</span>'; return; }
+  const secs = state.sections.filter(s => state.picked.has(s.key));
+  const jobs = [];
+  for (const s of secs) { const ch = chunkRecords(s.records, 30000); ch.forEach((c, i) => jobs.push({ s, recs: c, part: i + 1, of: ch.length })); }
+  state.cmpItems = []; state.cmpFilter = 'all'; state.cmpCheck = null;
+  cmpCtl = new AbortController();
+  $('#cmpGo').disabled = true; $('#cmpStop').hidden = false; $('#cmpCsv').hidden = true;
+  let partial = 0;
+  try {
+    for (let j = 0; j < jobs.length; j++) {
+      const { s, recs, part, of } = jobs[j];
+      status.textContent = `Checking ${s.num} ${s.title}${of > 1 ? ` (part ${part} of ${of})` : ''}. Request ${j + 1} of ${jobs.length}.`;
+      const op = otherPassagesFor(recs.map(r => r.text).join(' ') + ' ' + s.title);
+      if (!op.all) partial++;
+      const prompt = cmpPrompt(s, recs, part, of, op, '');
       const res = await caps.sample.json(prompt, { signal: cmpCtl.signal, modelTier: 'default' });
       for (const it of (res?.items || [])) if (it && it.topic) state.cmpItems.push({ ...it, sec: s.num, status: String(it.status || 'unclear').toLowerCase() });
       drawCmp();
     }
+    state.cmpSecs = secs.map(s => s.key); state.cmpTried = new Set();
+    state.cmpCheck = await checkComparison(cmpCtl.signal, t => { status.textContent = t; });
+    drawCmp();
+    if (cmpCtl.signal.aborted) throw { code: 'cancelled' };
     status.textContent = `Finished: ${plural(state.cmpItems.length, 'finding')} across ${plural(secs.length, 'section')}.` + (partial ? ` The ${state.other.kindLabel.toLowerCase()} is long, so for ${plural(partial, 'request')} only its most related passages were sent. Treat those gaps as “not found yet” and confirm them.` : ` The whole ${state.other.kindLabel.toLowerCase()} was read for every section.`);
   } catch (e) {
     status.innerHTML = errCopy(e) + (state.cmpItems.length ? ' Findings so far are kept below.' : '');
   } finally {
     $('#cmpGo').disabled = false; $('#cmpStop').hidden = true; $('#cmpCsv').hidden = !state.cmpItems.length; applyCaps(); scheduleWorkSave();
   }
+}
+
+/* ---------- automatic checking of a comparison ---------- */
+const cmpQuoteOk = c => !!(c && otherResolver(c.ref) && verifyQuote(c.quote, otherResolver(c.ref).text));
+const cmpSpecOk = c => !!(c && specResolver(c.ref) && verifyQuote(c.quote, specResolver(c.ref).text));
+// matches, conflicts and exclusions: read both sides again and confirm the status
+async function verifyCmpItems(round, signal, say) {
+  const todo = state.cmpItems.filter(it => ['match', 'conflict', 'exclusion'].includes(it.status) && needsCheck(it) && cmpSpecOk(it.spec) && cmpQuoteOk(it.other));
+  const kind = state.other.kindLabel.toLowerCase();
+  let changed = 0, confirmed = 0, calls = 0;
+  for (let i = 0; i < todo.length; i += 15) {
+    const batch = todo.slice(i, i + 15);
+    say(`Round ${round}: checking findings ${i + 1}–${i + batch.length} of ${todo.length} against both documents`);
+    const blocks = batch.map((it, k) => { const sr = specResolver(it.spec.ref), orr = otherResolver(it.other.ref);
+      return `C${k + 1}: said "${it.status}": ${it.topic}. ${it.note || ''}\n  Spec [${it.spec.ref}] ${sr.label}: ${sr.text}\n  ${state.other.kindLabel} [${it.other.ref}] ${orr.label}: ${orr.text}`; }).join('\n\n');
+    const out = await caps.sample.json(`Each finding below compares a specification requirement with a ${kind}. Using ONLY the text printed under each one, decide whether the stated result is right. Be strict about numbers, units, products, manufacturers and exclusions.
+
+Statuses: "match" (the ${kind} states it consistently), "conflict" (it states something different), "gap" (it doesn't address it), "exclusion" (it excludes or limits it), "unclear" (too vague to tell).
+
+Reply with only JSON: {"checks":[{"id":"C1","verdict":"right | wrong","status":"the correct status","other":{"ref":"O7","quote":"exact words, 5 to 25"} or null,"note":"one sentence with the values on each side"}]}
+
+${blocks}`, { signal, modelTier: 'default' });
+    calls++;
+    for (const c of (out && Array.isArray(out.checks) ? out.checks : [])) {
+      const it = batch[+String(c.id || '').replace(/\D/g, '') - 1]; if (!it) continue;
+      const prev = it.chk, n = (prev ? prev.n : 0) + 1, st = String(c.status || '').toLowerCase();
+      if (c.verdict === 'right' || st === it.status) {
+        if (prev && prev.status === 'corrected') it.chk = { ...prev, n, note: (prev.note || '') + ' Checked again after the correction and confirmed.' };
+        else { it.chk = { status: 'confirmed', n, note: c.note || 'Read both sides again and confirmed.' }; if (prev) changed++; }
+        confirmed++; continue;
+      }
+      const backed = ST_LABEL[st] && st !== 'extra' && (st === 'gap' || cmpQuoteOk(c.other) || (!c.other && cmpQuoteOk(it.other)));
+      if (backed && !(prev && prev.status === 'corrected')) {
+        it.chk = { status: 'corrected', n, was: ST_LABEL[it.status] + (it.note ? ': ' + it.note : ''), note: c.note || '' };
+        it.status = st; if (st === 'gap') it.other = null; else if (c.other) it.other = c.other; if (c.note) it.note = c.note; changed++;
+      } else {
+        it.chk = { status: 'disputed', n, was: prev && prev.was, note: `A second reading says “${ST_LABEL[st] || st || '?'}”${backed ? ' after it was already corrected once' : ', but its quote couldn’t be found in the ' + kind}. ${c.note || ''} Check by hand.` };
+        if (!prev || prev.status !== 'disputed') changed++;
+      }
+    }
+  }
+  return { changed, confirmed, calls, checked: todo.length };
+}
+// spec paragraphs no finding covers: send them again on their own
+async function huntCmpUncovered(round, signal, say) {
+  const tried = state.cmpTried || (state.cmpTried = new Set());
+  let added = 0, calls = 0;
+  for (const key of state.cmpSecs || []) {
+    const s = state.secMap.get(key); if (!s) continue;
+    const cited = new Set(state.cmpItems.filter(it => it.sec === s.num && it.spec).map(it => String(it.spec.ref)));
+    const recs = s.records.filter(r => r.kind !== 'part' && r.text.length >= 30 && !cited.has('S' + r.rid) && !tried.has(r.rid));
+    if (!recs.length) continue;
+    const ch = chunkRecords(recs, 30000);
+    for (let i = 0; i < ch.length; i++) {
+      say(`Round ${round}: ${plural(recs.length, 'paragraph')} of ${s.num} weren’t covered by any finding; checking them${ch.length > 1 ? ` (part ${i + 1} of ${ch.length})` : ''}`);
+      for (const r of ch[i]) tried.add(r.rid);
+      const op = otherPassagesFor(ch[i].map(r => r.text).join(' ') + ' ' + s.title);
+      const res = await caps.sample.json(cmpPrompt(s, ch[i], i + 1, ch.length, op, `NOTE: an earlier comparison of this section didn’t report on these paragraphs. Report on every requirement in them. Don’t list "extra" items; they were covered before.`), { signal, modelTier: 'default' });
+      calls++;
+      for (const it of (res?.items || [])) {
+        if (!it || !it.topic) continue;
+        const st = String(it.status || 'unclear').toLowerCase(); if (st === 'extra') continue;
+        if (state.cmpItems.some(x => x.sec === s.num && x.status === st && ((x.spec && it.spec && x.spec.ref === it.spec.ref) || similar(x.topic, it.topic) > 0.8))) continue;
+        state.cmpItems.push({ ...it, sec: s.num, status: st, round }); added++;
+      }
+    }
+  }
+  return { added, calls };
+}
+async function checkComparison(signal, say) {
+  return autoCheck('the comparison', signal, say, async round => {
+    const h = await huntCmpUncovered(round, signal, say); drawCmp();
+    const a = await verifyCmpItems(round, signal, say); drawCmp();
+    const b = await passCompare(round, signal, say); drawCmp();
+    return { added: h.added, changed: a.changed + b.changed, confirmed: a.confirmed + b.confirmed, calls: h.calls + a.calls + b.calls,
+      notes: [h.added ? `found ${plural(h.added, 'requirement')} the first pass didn’t report` : 'every spec paragraph is covered', a.checked ? `read both sides of ${plural(a.checked, 'finding')} again: ${a.confirmed} confirmed, ${a.changed} corrected or flagged` : '',
+        b.checked ? `searched the ${state.other.kindLabel.toLowerCase()} again for ${plural(b.checked, 'gap or unclear item')}: ${b.confirmed} held up, ${b.changed} changed` : ''] };
+  });
 }
 const ST_LABEL = { match: 'Match', conflict: 'Conflict', gap: 'Gap', exclusion: 'Exclusion', extra: 'Extra', unclear: 'Unclear' };
 function drawCmp() {
@@ -1252,12 +1384,12 @@ function drawCmp() {
   const shown = items.filter(it => state.cmpFilter === 'all' || it.status === state.cmpFilter)
     .sort((a, b) => (order.indexOf(a.status) + 9) % 9 - (order.indexOf(b.status) + 9) % 9);
   const kl = state.other ? state.other.kindLabel : 'Other document';
-  out.innerHTML = chips + shown.map(it => `
+  out.innerHTML = checkLogHtml(state.cmpCheck, items) + chips + shown.map(it => `
     <div class="ci s-${esc(it.status)}">
-      <div class="ci-h"><span class="st">${esc(ST_LABEL[it.status] || it.status)}</span><span class="ci-topic">${esc(it.topic)}${chkBadge(it.chk)}</span><span class="ci-sec">${esc(it.sec)}</span></div>
+      <div class="ci-h"><span class="st">${esc(ST_LABEL[it.status] || it.status)}</span><span class="ci-topic">${esc(it.topic)}${newBadge(it.round)}${chkBadge(it.chk)}</span><span class="ci-sec">${esc(it.sec)}</span></div>
       <div class="ci-cols"><div><h4>Spec says</h4>${citeHtml(it.spec, specResolver)}</div><div><h4>${esc(kl)} says</h4>${citeHtml(it.other, otherResolver)}</div></div>
-      ${it.note ? `<p class="ci-note">${esc(it.note)}</p>` : ''}
-      ${it.status !== 'match' ? decHtml(cmpKey(it)) : ''}
+      ${it.note ? `<p class="ci-note">${esc(it.note)}</p>` : ''}${chkNote(it.chk)}
+      ${it.status !== 'match' || (it.chk && it.chk.status === 'disputed') ? decHtml(cmpKey(it)) : ''}
     </div>`).join('');
   updateIssueCount();
 }
@@ -1441,6 +1573,121 @@ async function saveZip() {
   btn.disabled = false; btn.textContent = 'Save all sections (ZIP)';
 }
 
+/* ---------- Splitting: drawing sets by sheet, and any PDF into parts under a size limit ---------- */
+// The sheet title: the biggest wording in the title block near the sheet number ("INTERIOR ELEVATIONS")
+const TB_SKIP = /^(?:SHEET(?:\s+(?:NO|NUMBER|TITLE))?|SCALE|DATE|DRAWN|CHECKED|PROJECT|JOB|REV(?:ISION)?S?|ISSUE[DS]?|NO\.?|SEAL|KEY ?PLAN|NORTH|PHASE|FOR CONSTRUCTION|NOT FOR CONSTRUCTION)\b|^[\d\s\/.:,-]+$|\d{1,2}\/\d{1,2}\/\d{2,4}|\.dwg\b/i;
+function sheetTitle(pg) {
+  if (pg.title) return pg.title;
+  const sh = pg.sheet && pg.sheet.ci != null ? pg.chunks[pg.sheet.ci] : null;
+  let best = null, bs = -Infinity;
+  pg.chunks.forEach((c, i) => {
+    if (sh && i === pg.sheet.ci) return;
+    const t = c.s.trim();
+    if (c.nx < 0.6 || c.ny < 0.55 || t.length < 4 || !/[A-Za-z]{3}/.test(t) || TB_SKIP.test(t) || WHOLEID.test(t)) return;
+    const dist = sh ? Math.hypot(c.nx - sh.nx, c.ny - sh.ny) : 0;
+    const score = c.h * 2 - dist * 60 + (sh && c.ny < sh.ny ? 4 : 0);
+    if (score > bs) { bs = score; best = t; }
+  });
+  return best ? best.replace(/\s+/g, ' ').slice(0, 80) : '';
+}
+async function loadSetPdf(set) {
+  const b = await setBlob(set);
+  if (!b) throw new Error(`The original PDF for ${set.name} isn’t saved in this project. Open it again.`);
+  return PDFLib.PDFDocument.load(new Uint8Array(await b.arrayBuffer()), { ignoreEncryption: true, updateMetadata: false });
+}
+const mb = n => n < 1048576 ? Math.max(1, Math.round(n / 1024)) + ' KB' : (n / 1048576).toFixed(n < 10485760 ? 1 : 0) + ' MB';
+const zipBlob = (zip, onPct) => zip.generateAsync({ type: 'blob', compression: 'STORE' }, m => onPct && onPct(m.percent));   // PDFs are already compressed
+
+async function splitSetBySheet(set, btn) {
+  const label = btn.textContent; btn.disabled = true;
+  try {
+    btn.textContent = 'Reading the PDF…';
+    const src = await loadSetPdf(set);
+    const zip = new JSZip(), used = new Map(), rows = [['Sheet', 'Title', 'Series', 'PDF page', 'File', 'Size']];
+    for (const pg of set.pages) {
+      btn.textContent = `Splitting ${pg.n} of ${set.pages.length}…`;
+      const disp = pg.sheet ? pg.sheet.disp : '', title = sheetTitle(pg);
+      const series = pg.sheet && pg.sheet.prefix ? pg.sheet.prefix.toUpperCase() : 'No sheet number';
+      let name = safeName(disp ? `${disp}${title ? ' ' + title : ''}` : `PDF page ${String(pg.n).padStart(4, '0')}${title ? ' ' + title : ''}`);
+      if (used.has(series + '/' + name)) name += ` (PDF p. ${pg.n})`;     // two pages with the same sheet number keep both
+      used.set(series + '/' + name, 1);
+      const bytes = await pagesPdf(src, [pg.n]);
+      zip.file(`${series}/${name}.pdf`, bytes);
+      rows.push([disp, title, series, pg.n, `${series}/${name}.pdf`, mb(bytes.length)]);
+      if (pg.n % 4 === 0) await tick();
+    }
+    zip.file('Sheet list.csv', rows.map(r => r.map(csvCell).join(',')).join('\r\n'));
+    const blob = await zipBlob(zip, p => { btn.textContent = `Packing the ZIP… ${Math.round(p)}%`; });
+    await saveFile(safeName(set.name.replace(/\.pdf$/i, '')) + ' - split by sheet.zip', blob);
+    $('#dwgStatus').textContent = `${set.name}: split into ${plural(set.pages.length, 'sheet PDF')} (${mb(blob.size)}), in folders by sheet series, with a sheet list.`;
+  } catch (e) { $('#dwgStatus').innerHTML = `<span class="err">Couldn’t split ${esc(set.name)}: ${esc(e.message || e)}</span>`; }
+  btn.disabled = false; btn.textContent = label;
+}
+
+// units = groups of pages that must stay together (a spec section, or one drawing sheet), in page order
+function specUnits() {
+  const units = [];
+  for (const p of state.pageMap) {
+    const key = p.primary || null, last = units[units.length - 1];
+    if (last && key && last.key === key) last.pages.push(p.n);
+    else { const sec = key ? state.secMap.get(key) : null; units.push({ key, label: sec ? sec.num : `p. ${p.n}`, pages: [p.n] }); }
+  }
+  return units;
+}
+const setUnits = set => set.pages.map(pg => ({ key: null, label: pg.sheet ? pg.sheet.disp : `p. ${pg.n}`, pages: [pg.n] }));
+async function splitBySize(src, units, limit, base, say) {
+  const notes = [];
+  // measure each unit on its own; a unit over the limit is broken into pages (and a page over it stands alone)
+  const sized = [];
+  for (let i = 0; i < units.length; i++) {
+    const u = units[i];
+    if (i % 5 === 0) { say(`Measuring ${i + 1} of ${units.length}…`); await tick(); }
+    u.size = (await pagesPdf(src, u.pages)).length;
+    if (u.size > limit && u.pages.length > 1) {
+      notes.push(`${u.label} (${plural(u.pages.length, 'page')}, ${mb(u.size)}) is bigger than the limit, so it was split between parts.`);
+      for (const n of u.pages) sized.push({ key: u.key, label: u.label, pages: [n], size: (await pagesPdf(src, [n])).length });
+    } else { if (u.size > limit) notes.push(`${u.label} is ${mb(u.size)} on its own, over the limit; it’s in a part by itself.`); sized.push(u); }
+  }
+  // pack in order; shared fonts make the real part smaller than the sum, and a part that still comes out too big is halved
+  const groups = []; let cur = [], tot = 0;
+  for (const u of sized) { if (cur.length && tot + u.size > limit) { groups.push(cur); cur = []; tot = 0; } cur.push(u); tot += u.size; }
+  if (cur.length) groups.push(cur);
+  const parts = [];
+  const build = async g => {
+    const bytes = await pagesPdf(src, g.flatMap(u => u.pages));
+    if (bytes.length > limit && g.length > 1) { const h = Math.ceil(g.length / 2); await build(g.slice(0, h)); await build(g.slice(h)); }
+    else parts.push({ g, bytes });
+  };
+  for (let i = 0; i < groups.length; i++) { say(`Building part ${i + 1} of about ${groups.length}…`); await build(groups[i]); await tick(); }
+  const zip = new JSZip(), w = String(parts.length).length < 2 ? 2 : String(parts.length).length;
+  const rows = [['Part', 'File', 'Size', 'First', 'Last', 'PDF pages', 'Page count']];
+  parts.forEach((p, i) => {
+    const pages = p.g.flatMap(u => u.pages), first = p.g[0].label, last = p.g[p.g.length - 1].label;
+    const name = safeName(`${base} - part ${String(i + 1).padStart(w, '0')} of ${parts.length} (${first === last ? first : first + ' to ' + last})`) + '.pdf';
+    zip.file(name, p.bytes);
+    rows.push([i + 1, name, mb(p.bytes.length), first, last, ranges(pages).join(', '), pages.length]);
+  });
+  zip.file('Parts list.csv', rows.map(r => r.map(csvCell).join(',')).join('\r\n'));
+  return { zip, parts, notes };
+}
+async function runSplitBySize(which, btn) {
+  const label = btn.textContent; btn.disabled = true;
+  const limit = +(which === 'spec' ? $('#splitMb') : $('#dwgSplitMb')).value * 1048576;
+  const say = t => { btn.textContent = t; };
+  const tell = h => { if (which === 'spec') alertBar(h); else $('#dwgStatus').innerHTML = h; };
+  try {
+    let src, units, base;
+    if (which === 'spec') { say('Reading the PDF…'); src = await getSrcPdf(); units = specUnits(); base = safeName(state.fileName.replace(/\.pdf$/i, '')); }
+    else { const set = findSet(which); say('Reading the PDF…'); src = await loadSetPdf(set); units = setUnits(set); base = safeName(set.name.replace(/\.pdf$/i, '')); }
+    const { zip, parts, notes } = await splitBySize(src, units, limit, base, say);
+    const blob = await zipBlob(zip, p => say(`Packing the ZIP… ${Math.round(p)}%`));
+    await saveFile(`${base} - parts under ${limit / 1048576} MB.zip`, blob);
+    const msg = `Split into ${plural(parts.length, 'part')} under ${limit / 1048576} MB (largest ${mb(Math.max(...parts.map(p => p.bytes.length)))}), keeping ${which === 'spec' ? 'each section' : 'each sheet'} whole${notes.length ? ' where it fits. ' + notes.join(' ') : '.'}`;
+    if (which === 'spec') { const f = $('#fileInfo'); f.textContent = msg; } else tell(esc(msg));
+  } catch (e) { tell(`Couldn’t split the PDF: ${esc(e.message || e)}`); }
+  btn.disabled = false; btn.textContent = label;
+}
+
 /* ---------- reviewer decisions (kept in this browser) ---------- */
 const DECS = [['review', 'Review required'], ['approved', 'Approved exception'], ['correct', 'Correction needed']];
 const DEC_LABEL = Object.fromEntries(DECS);
@@ -1594,7 +1841,7 @@ function analyzeDrawings() {
         if (t.hits.length < 400) t.hits.push({ set, pg, ci });
       }
     });
-    for (const r of (state.reRefs || {})[set.id + ':' + pg.n] || []) { const m = String(r).match(/(?:(\d{1,2}|[A-Z]\d?)\s*\/\s*)?([A-Z]{1,3})[-.]?(\d{1,3}(?:\.\d{1,3})?[A-Za-z]?)/i); if (m) found.push({ set, pg, ci: null, key: (m[2] + m[3]).toUpperCase(), disp: m[2].toUpperCase() + m[3], detail: m[1] || null, fromClaude: true }); }
+    for (const r of (state.reRefs || {})[set.id + ':' + pg.n] || []) { const m = String(r).match(/(?:(\d{1,2}|[A-Z]\d?)\s*\/\s*)?([A-Z]{1,3})[-.]?(\d{1,3}(?:\.\d{1,3})?[A-Za-z]?)/i); if (m) found.push({ set, pg, ci: null, key: (m[2] + m[3]).toUpperCase(), disp: m[0].replace(/^(?:\d{1,2}|[A-Z]\d?)\s*\/\s*/i, '').toUpperCase(), detail: m[1] || null, fromClaude: true }); }
     pg.autoIndex = pg.n <= 4 && ids.size >= 10;
     const isIndex = pg.indexOverride != null ? pg.indexOverride : pg.autoIndex;
     pg.isIndex = isIndex; pg.listed = isIndex ? ids : null;
@@ -1638,10 +1885,10 @@ function analyzeDrawings() {
       const notThere = [...listed.keys()].filter(k => !sheets.has(k));
       const notListed = [...inSet.keys()].filter(k => !listed.has(k));
       if (notThere.length) issues.push({ key: 'dwg:idxmiss:' + set.name + ':' + notThere.join(','), type: 'Sheet index mismatch', sev: 1,
-        title: `${set.name}: the sheet index lists ${plural(notThere.length, 'sheet')} that aren’t in the PDF`, detail: notThere.map(k => listed.get(k)).join(', '),
+        title: `${set.name}: the sheet index lists ${plural(notThere.length, 'sheet')} that ${notThere.length === 1 ? 'isn’t' : 'aren’t'} in the PDF`, detail: notThere.map(k => listed.get(k)).join(', '),
         occ: idx.map(p => ({ sid: set.id, n: p.n, ci: null, label: `Sheet index, PDF p. ${p.n}` })) });
       if (notListed.length) issues.push({ key: 'dwg:idxextra:' + set.name + ':' + notListed.join(','), type: 'Sheet index mismatch', sev: 2,
-        title: `${set.name}: ${plural(notListed.length, 'sheet')} in the PDF aren’t on the sheet index`, detail: notListed.map(k => inSet.get(k).sheet.disp).join(', '),
+        title: `${set.name}: ${plural(notListed.length, 'sheet')} in the PDF ${notListed.length === 1 ? 'isn’t' : 'aren’t'} on the sheet index`, detail: notListed.map(k => inSet.get(k).sheet.disp).join(', '),
         occ: notListed.slice(0, 40).map(k => { const p = inSet.get(k); return { sid: set.id, n: p.n, ci: p.sheet.ci, label: `${p.sheet.disp} (PDF p. ${p.n})` }; }) });
     }
     const stampOnly = set.pages.filter(p => p.sheet && p.sheet.fromStamp).length;
@@ -1786,6 +2033,8 @@ function renderDrawings() {
       dwgBusy = true; addPictures(files, $('#dwgKind').value, true).finally(() => { dwgBusy = false; });
     });
     pane.addEventListener('click', e => {
+      const sp = e.target.closest('[data-splitsheets]'); if (sp) { const set = findSet(sp.dataset.splitsheets); if (set) splitSetBySheet(set, sp); return; }
+      const sz = e.target.closest('[data-splitsize]'); if (sz) { runSplitBySize(sz.dataset.splitsize, sz); return; }
       const rm = e.target.closest('[data-rmset]');
       if (rm) {
         const i = D.sets.findIndex(s => s.id === rm.dataset.rmset);
@@ -1816,7 +2065,9 @@ function renderDrawings() {
     pane.addEventListener('input', e => { if (e.target.id === 'tagFilter') drawTagTable(); if (e.target.id === 'refFilter') drawRefTable(); });
   }
   drawDwgAsk();
-  $('#dwgSets').innerHTML = D.sets.map(s => `<div class="set-row"><span class="set-kind">${esc(s.kind)}</span><span>${esc(s.name)}</span><span class="note">${s.isImage ? plural(s.pages.length, 'picture') : plural(s.pages.length, 'page')}, ${s.pages.filter(p => p.sheet).length} with sheet numbers</span><button class="btn ghost small" data-rmset="${s.id}">Remove</button></div>`).join('');
+  $('#dwgSets').innerHTML = D.sets.map(s => `<div class="set-row"><span class="set-kind">${esc(s.kind)}</span><span>${esc(s.name)}</span><span class="note">${s.isImage ? plural(s.pages.length, 'picture') : plural(s.pages.length, 'page')}, ${s.pages.filter(p => p.sheet).length} with sheet numbers</span>${s.isImage ? '' : `<button class="btn ghost small need-dl" data-splitsheets="${s.id}">Split into sheets (ZIP)</button><button class="btn ghost small need-dl" data-splitsize="${s.id}">Split by size (ZIP)</button>`}<button class="btn ghost small" data-rmset="${s.id}">Remove</button></div>`).join('') +
+    (D.sets.some(s => !s.isImage) ? `<p class="note need-dl" style="margin:.4rem 0 0">Split by size makes parts <select id="dwgSplitMb" aria-label="Largest part size">${[10, 25, 50, 100].map(n => `<option value="${n}" ${n === 25 ? 'selected' : ''}>under ${n} MB</option>`).join('')}</select>, for email or upload, keeping each sheet whole.</p>` : '');
+  applyCaps();
   drawDwgResults();
 }
 
@@ -1933,7 +2184,7 @@ function closePreview() { $('#preview').hidden = true; if (pvTask) { pvTask.canc
 /* ---------- Issues: everything that needs a decision ---------- */
 function allIssues() {
   const list = [];
-  for (const it of state.cmpItems) if (it.status !== 'match') list.push({
+  for (const it of state.cmpItems) if (it.status !== 'match' || (it.chk && it.chk.status === 'disputed')) list.push({
     key: cmpKey(it), source: 'Spec comparison', type: ST_LABEL[it.status] || it.status, title: `${it.sec}: ${it.topic}`, detail: it.note || '',
     spec: it.spec, other: it.other
   });
@@ -2067,8 +2318,8 @@ function workSnapshot() {
     const auto = p.autoSheet ? p.autoSheet.key : null, cur = p.sheet ? p.sheet.key : null;
     if (auto !== cur || p.indexOverride != null) (sheetEdits[s.id] = sheetEdits[s.id] || {})[p.n] = { sheet: p.sheet && p.sheet.manual ? p.sheet.disp : (cur === auto ? undefined : null), idx: p.indexOverride };
   }
-  const summaries = [...state.summaries].filter(([, v]) => !v.running && !v.error).map(([k, v]) => [k, { points: v.points, chunks: v.chunks }]);
-  return { deep: { log: state.deep.log.slice(0, 10), xrefs: state.deep.xrefs }, reRefs: state.reRefs, rs: state.rs, mv: state.mv, checks: state.checks, reviews: state.reviews, decisions: state.decisions, cmpItems: state.cmpItems, summaries, picked: [...(state.picked || [])], sheetEdits, current: state.current };
+  const summaries = [...state.summaries].filter(([, v]) => !v.running && !v.error).map(([k, v]) => [k, { points: v.points, chunks: v.chunks, check: v.check || null }]);
+  return { deep: { log: state.deep.log.slice(0, 10), xrefs: state.deep.xrefs }, reRefs: state.reRefs, reRefsChk: state.reRefsChk || {}, rs: state.rs, mv: state.mv, checks: state.checks, reviews: state.reviews, decisions: state.decisions, cmpItems: state.cmpItems, cmpCheck: state.cmpCheck || null, cmpSecs: state.cmpSecs || [], summaries, picked: [...(state.picked || [])], sheetEdits, current: state.current };
 }
 let workTimer = null;
 function scheduleWorkSave() {
@@ -2119,14 +2370,14 @@ async function openProject(id) {
       $('#fileInfo').textContent = `${spec.fileName}: ${plural(state.pages.length, 'page')}, ${plural(state.sections.length, 'section')}`;
     }
     if (other) { state.other = buildOther(other.name, other.chunks, other.kindLabel); state.other.pages = other.pages || 0; }
-    state.cmpItems = w.cmpItems || [];
+    state.cmpItems = w.cmpItems || []; state.cmpCheck = w.cmpCheck || null; state.cmpSecs = w.cmpSecs || []; state.cmpTried = new Set();
     state.summaries = new Map(w.summaries || []);
     state.picked = new Set((w.picked || []).filter(k => state.secMap.has(k)));
     state.reviews = w.reviews || [];
     state.rs = w.rs || { rows: [], done: {}, sheetNotes: {} };
     state.mv = w.mv ? { ...w.mv, layout: w.mv.layout || MV_STARTER } : { layout: MV_STARTER, source: 'schedule', map: {}, units: 'asis', estimate: null };
     state.checks = w.checks || {};
-    state.reRefs = w.reRefs || {};
+    state.reRefs = w.reRefs || {}; state.reRefsChk = w.reRefsChk || {};
     state.deep = { log: (w.deep && w.deep.log) || [], xrefs: (w.deep && w.deep.xrefs) || [], running: false };
     progress('Opening ' + meta.name, 'Loading drawing sets…', 0.75); await tick();
     for (const ds of meta.dwgSets || []) {
@@ -2332,7 +2583,7 @@ function archRefsOn(set, n, region) {
     const m = String(r).match(/(?:(\d{1,2}|[A-Z]\d?)\s*\/\s*)?([A-Z]{1,3})[-.]?(\d{1,3}(?:\.\d{1,3})?[A-Za-z]?(?:\.\d{1,2})?)/i); if (!m) continue;
     const key = (m[2] + m[3]).toUpperCase(); if (seen.has(key)) continue; seen.add(key);
     const hits = (state.dwg.sheets.get(key) || []).filter(h => h.set.id !== set.id);
-    out.push({ key, disp: m[2].toUpperCase() + m[3], detail: m[1] || null, target: hits[0] || null, fromClaude: true });
+    out.push({ key, disp: m[0].replace(/^(?:\d{1,2}|[A-Z]\d?)\s*\/\s*/i, '').toUpperCase(), detail: m[1] || null, target: hits[0] || null, fromClaude: true });
   }
   return out;
 }
@@ -2412,18 +2663,22 @@ function textOnPage(set, n, text) {
   return all.includes(normQ(text));
 }
 
-async function compareOnePair(pair, signal, onStatus) {
+async function compareOnePair(pair, signal, onStatus, opt = {}) {
   const shopSet = findSet(pair.shop.sid), archSet = pair.arch.sid ? findSet(pair.arch.sid) : null;
   const specKeys = pair.specKeys;
-  let lim = null; try { lim = await caps.sample.limits(); } catch {}
-  const maxImg = lim && lim.images ? lim.images.maxCount : 0;
-  const per = archSet ? Math.min(5, Math.floor(maxImg / 2)) : Math.min(5, maxImg);
-  onStatus('Drawing the sheets for Claude…');
-  const shopImgs = await sideImages(shopSet, pair.shop.n, pair.shop.region, per);
-  const archImgs = archSet ? await sideImages(archSet, pair.arch.n, pair.arch.region, per) : [];
-  const shopTxt = regionText(shopSet, pair.shop.n, pair.shop.region, archSet ? 35000 : 60000);
-  const archTxt = archSet ? regionText(archSet, pair.arch.n, pair.arch.region, 35000) : null;
-  const specRecs = specKeys && specKeys.size ? reviewSpecPassages(specKeys, shopTxt.text + ' ' + (archTxt ? archTxt.text : ''), 50000) : [];
+  const C = opt.cache || {};          // a later look reuses the images and text of the first one
+  if (!C.shopImgs) {
+    let lim = null; try { lim = await caps.sample.limits(); } catch {}
+    const maxImg = lim && lim.images ? lim.images.maxCount : 0;
+    const per = archSet ? Math.min(5, Math.floor(maxImg / 2)) : Math.min(5, maxImg);
+    onStatus('Drawing the sheets for Claude…');
+    C.shopImgs = await sideImages(shopSet, pair.shop.n, pair.shop.region, per);
+    C.archImgs = archSet ? await sideImages(archSet, pair.arch.n, pair.arch.region, per) : [];
+    C.shopTxt = regionText(shopSet, pair.shop.n, pair.shop.region, archSet ? 35000 : 60000);
+    C.archTxt = archSet ? regionText(archSet, pair.arch.n, pair.arch.region, 35000) : null;
+    C.specRecs = specKeys && specKeys.size ? reviewSpecPassages(specKeys, C.shopTxt.text + ' ' + (C.archTxt ? C.archTxt.text : ''), 50000) : [];
+  }
+  const { shopImgs, archImgs, shopTxt, archTxt, specRecs } = C;
   const shopLabel = `${pageLabel(shopSet, pair.shop.n)}${pair.shop.region ? ', selected area' : ''}`;
   const archLabel = archSet ? `${pageLabel(archSet, pair.arch.n)}${pair.arch.region ? ', selected area' : ''}` : '';
   let imgDesc = '';
@@ -2462,8 +2717,11 @@ ${archTxt.text || '(no text found in this area)'}
 ` : ''}${specRecs.length ? `
 SPECIFICATION PASSAGES:
 ${specRecs.map(r => passageLine(r, 'R' + r.rid)).join('\n')}
+` : ''}${opt.already ? `
+ALREADY FOUND by an earlier look (don't repeat these; report only differences missing from this list, or an empty list if there are none):
+${opt.already.map(it => `- [${it.status}] ${it.topic}: shop ${it.shop_text || '—'}, architect ${it.arch_text || '—'}`).join('\n')}
 ` : ''}`;
-  onStatus(`Claude is comparing ${shopLabel}${archSet ? ' with ' + archLabel : ''}. Reading drawings takes a minute or two.`);
+  if (opt.already) onStatus('Looking over the sheets again for anything the first look missed…'); else onStatus(`Claude is comparing ${shopLabel}${archSet ? ' with ' + archLabel : ''}. Reading drawings takes a minute or two.`);
   const res = await caps.sample.json(prompt, { signal, modelTier: 'default', images: shopImgs.length ? [...shopImgs, ...archImgs].map(x => x.blob) : undefined });
   const items = (Array.isArray(res?.items) ? res.items : []).filter(it => it && it.topic).map(it => ({ ...it, status: RV_STATUS[String(it.status || '').toLowerCase()] ? String(it.status).toLowerCase() : 'unclear',
     shopLoc: toPageBox(it.shop_box, pair.shop.region), archLoc: archSet ? toPageBox(it.arch_box, pair.arch.region) : null }));
@@ -2488,11 +2746,11 @@ function rvItemHtml(r, it, withDec) {
   const shopSet = findSet(r.shop.sid), archSet = r.arch ? findSet(r.arch.sid) : null;
   const [label, cls] = RV_STATUS[it.status] || RV_STATUS.unclear;
   return `<div class="ci s-${cls}">
-    <div class="ci-h"><span class="st">${esc(label)}</span><span class="ci-topic">${esc(it.topic)}${chkBadge(it.chk)}</span>${it.possibly_intentional ? '<span class="pi">Possibly intentional</span>' : ''}<span class="ci-sec">${esc(it.category || '')}</span></div>
+    <div class="ci-h"><span class="st">${esc(label)}</span><span class="ci-topic">${esc(it.topic)}${newBadge(it.round)}${chkBadge(it.chk)}</span>${it.possibly_intentional ? '<span class="pi">Possibly intentional</span>' : ''}<span class="ci-sec">${esc(it.category || '')}</span></div>
     <div class="ci-cols3"><div><h4>Shop drawing</h4>${rvQuoteHtml(it.shop_text, shopSet, r.shop.n, it.from_image, it.shopLoc)}</div>
       ${r.arch ? `<div><h4>Architect</h4>${rvQuoteHtml(it.arch_text, archSet, r.arch.n, it.from_image, it.archLoc)}</div>` : ''}
       <div><h4>Spec</h4>${it.spec && it.spec.ref ? citeHtml(it.spec, specResolver) : '<span class="none">No spec passage</span>'}</div></div>
-    ${it.note ? `<p class="ci-note">${esc(it.note)}</p>` : ''}
+    ${it.note ? `<p class="ci-note">${esc(it.note)}</p>` : ''}${chkNote(it.chk)}
     ${rvWhere(r, it, shopSet, archSet)}
     ${withDec && it.status !== 'match' ? decHtml(rvKey(r, it)) : ''}
   </div>`;
@@ -2565,7 +2823,9 @@ function rvRefsHtml() {
     const noText = set.pages[st.n - 1].chunks.length < 5, asked = state.reRefs[set.id + ':' + st.n];
     return `<p class="note">No “RE:” architect references found ${st.region ? 'in the selected area' : 'on this sheet'}${asked ? ' (Claude read the picture and found none that match a loaded sheet: ' + esc(asked.join(', ')) + ')' : ''}.${noText && !asked ? ' This sheet has no text layer.' : ''}</p>${noText && !asked ? '<button class="btn ghost small need-ai" id="rvReadRe">Read RE: references from the picture</button>' : ''}`;
   }
-  return `<div class="occ"><span class="note">Architect references ${st.region ? 'in the selected area' : 'on this sheet'}:</span>${refs.map(r => r.target
+  const rc = (state.reRefsChk || {})[set.id + ':' + st.n];
+  const unsure = rc && rc.uncertain.length ? `<p class="note"><span class="vbad">Read only once in ${plural(rc.reads, 'reading')}, check by eye:</span> ${esc(rc.uncertain.join(', '))}</p>` : rc ? `<p class="note">Read ${plural(rc.reads, 'time')} from the picture; the readings agree.</p>` : '';
+  return unsure + `<div class="occ"><span class="note">Architect references ${st.region ? 'in the selected area' : 'on this sheet'}:</span>${refs.map(r => r.target
     ? `<button class="ref" data-rvgo="${r.target.set.id}:${r.target.pg.n}">RE: ${esc((r.detail ? r.detail + '/' : '') + r.disp)}</button>`
     : `<span class="ref" title="Not in the loaded drawings">RE: ${esc((r.detail ? r.detail + '/' : '') + r.disp)} (not loaded)</span>`).join('')}</div>`;
 }
@@ -2713,9 +2973,27 @@ async function runReviews(pairs) {
   try {
     for (let i = 0; i < pairs.length; i++) {
       const pre = pairs.length > 1 ? `Sheet ${i + 1} of ${pairs.length}. ` : '';
-      const r = await compareOnePair({ ...pairs[i], specKeys }, rv.ctl.signal, msg => { st.textContent = pre + msg; });
+      const cache = {}, pair = { ...pairs[i], specKeys };
+      const r = await compareOnePair(pair, rv.ctl.signal, msg => { st.textContent = pre + msg; }, { cache });
       state.reviews.unshift(r); done++;
       drawReviews(); updateIssueCount(); scheduleWorkSave();
+      r.check = await autoCheck('the findings', rv.ctl.signal, t => { st.textContent = pre + t; }, async round => {
+        const say = t => { st.textContent = pre + t; };
+        const v = await passDrawings(round, rv.ctl.signal, say, [r]);
+        // look again with the list of what was found; only new differences come back
+        const again = await compareOnePair(pair, rv.ctl.signal, say, { cache, already: r.items });
+        let added = 0;
+        for (const it of again.items) {
+          if (it.status === 'match') continue;
+          if (r.items.some(x => (normV(x.shop_text) === normV(it.shop_text) && normV(x.arch_text) === normV(it.arch_text) && (x.shop_text || x.arch_text)) || similar(x.topic, it.topic) > 0.8)) continue;
+          r.items.push({ ...it, round }); added++;
+        }
+        drawReviews(); updateIssueCount();
+        return { added, changed: v.changed, confirmed: v.confirmed, calls: v.calls + 1,
+          notes: [v.checked ? `zoomed in on ${plural(v.checked, 'finding')}: ${v.confirmed} confirmed, ${v.changed} not confirmed` : '', added ? `a fresh look found ${plural(added, 'difference')} the first look missed` : 'a fresh look found nothing new'] };
+      });
+      drawReviews(); updateIssueCount(); scheduleWorkSave();
+      if (rv.ctl.signal.aborted) throw { code: 'cancelled' };
     }
     st.textContent = `Finished ${plural(done, 'comparison')}. Findings are also in the Issues tab.`; updatePairCount();
   } catch (e) {
@@ -2735,6 +3013,7 @@ function drawReviews() {
     return `<details class="blk rv-res" ${idx === 0 ? 'open' : ''}><summary>${esc(r.shop.label)}${r.arch ? ' vs ' + esc(r.arch.label) : ' vs spec'}</summary>
       <p class="note">${esc(fmtDate(r.at))}. ${order.filter(k => counts[k]).map(k => `${counts[k]} ${RV_STATUS[k][0].toLowerCase()}`).join(', ') || 'No findings'}.${r.textOnly ? ' Compared from drawing text only, without images.' : ` Claude looked at ${plural(r.images, 'image')}.`}${r.specCount ? ` Checked against ${plural(r.specCount, 'spec paragraph')}.` : ''} <button class="linkish" data-rvdel="${r.id}">Remove this result</button></p>
       ${r.summary ? `<p class="lead" style="max-width:75ch">${esc(r.summary)}</p>` : ''}
+      ${checkLogHtml(r.check, r.items.filter(it => it.status !== 'match' || it.round))}
       ${benchHtml(r)}
       ${items.map(it => rvItemHtml(r, it, true)).join('')}
     </details>`;
@@ -2773,7 +3052,11 @@ function rsConflicts() {
   return out;
 }
 function rsIssues() {
-  return rsConflicts().map(c => {
+  const flagged = state.rs.rows.filter(r => r.chk && r.chk.status === 'disputed' && !r.verified).map(r => ({
+    key: 'rsd:' + hashStr([r.src ? r.src.label : '', r.f.room, r.f.item, r.f.desc].join('|')), source: 'Room schedule', type: 'Row not confirmed', cls: 'unclear',
+    title: `Room ${r.f.room || '?'} ${r.f.item || r.f.desc || ''} (${r.src ? r.src.label : ''}): a second reading didn’t confirm this row`, detail: r.chk.note || '',
+    occ: r.src ? [{ sid: r.src.sid, n: r.src.n, ci: r.src.ci ?? null, label: r.src.label }] : [] }));
+  return flagged.concat(rsConflicts().map(c => {
     const r0 = c.rows[0];
     const where = [...c.vals].map(([v, rs]) => `${rs[0].f[c.field]} (${rs.map(r => r.src ? r.src.label : 'typed in').join(', ')})`).join(' vs ');
     return {
@@ -2782,7 +3065,7 @@ function rsIssues() {
       detail: where,
       occ: c.rows.filter(r => r.src).map(r => ({ sid: r.src.sid, n: r.src.n, ci: r.src.ci ?? null, label: r.src.label }))
     };
-  });
+  }));
 }
 
 function suggestRoomSheets() {
@@ -2824,6 +3107,9 @@ Reply with only JSON in this shape:
 SHEET TEXT (${label})${txt.truncated ? ', shortened to fit' : ''}:
 ${txt.text || '(no text found)'}`;
   const res = await caps.sample.json(prompt, { signal, modelTier: 'default', images: imgs.length ? imgs.map(x => x.blob) : undefined });
+  return { rows: rsRowsFrom(res, set, n, label), notes: res && res.sheet_notes ? String(res.sheet_notes) : '', textOnly: !imgs.length, ctx: { prompt, imgs, label } };
+}
+function rsRowsFrom(res, set, n, label) {
   const rows = [];
   for (const room of (res && Array.isArray(res.rooms) ? res.rooms : [])) for (const it of (Array.isArray(room.items) ? room.items : [])) {
     const ev = (Array.isArray(it.evidence) ? it.evidence : []).filter(Boolean).slice(0, 4);
@@ -2837,7 +3123,60 @@ ${txt.text || '(no text found)'}`;
       src: { sid: set.id, n, label, ci, box: toPageBox(it.box, null), evidence: ev, evFound: noText ? -1 : evFound.length }
     });
   }
-  return { rows, notes: res && res.sheet_notes ? String(res.sheet_notes) : '', textOnly: !imgs.length };
+  return rows;
+}
+const RS_JSON = { room: 'room', roomName: 'room_name', item: 'item', desc: 'product', qty: 'qty', width: 'width', height: 'height', depth: 'depth', material: 'material', finish: 'finish', ctop: 'countertop', ctopHt: 'counter_height', bsHt: 'backsplash_height', hardware: 'hardware', notes: 'special_conditions' };
+const RS_FROM_JSON = Object.fromEntries(Object.entries(RS_JSON).map(([a, b]) => [b, a]));
+// Check the rows read from one sheet against that sheet, in rounds. A corrected value is only taken when it is
+// in the sheet's text; on a sheet without text a suggested correction goes to a person.
+async function checkRoomSheet(set, n, ctx, signal, say) {
+  const noText = set.pages[n - 1].chunks.length < 5;
+  const mine = () => state.rs.rows.filter(r => r.src && r.src.sid === set.id && r.src.n === n && r.origin === 'ai' && !r.edited && !r.verified);
+  return autoCheck(`the rows from ${ctx.label}`, signal, say, async round => {
+    const todo = mine().filter(needsCheck);
+    say(`Round ${round}: reading ${ctx.label} again to check ${plural(todo.length, 'row')} and look for missed items`);
+    const rowTxt = r => Object.entries(RS_JSON).filter(([f]) => r.f[f]).map(([f, j]) => `${j}: ${r.f[f]}`).join(' | ');
+    const out = await caps.sample.json(ctx.prompt.replace(/\nReply with only JSON in this shape:[\s\S]*?\nSHEET TEXT/, `
+This is a second look. The rows below were read from this sheet earlier. For each row: "right" if every filled value matches the sheet; "wrong" if a value is wrong or missing (give only the corrected fields in "fix", using the field names shown, and exact text from the sheet in "evidence"); "not_on_sheet" if the item isn't on this sheet. Then list millwork items the rows miss, in the same form as before.
+
+ROWS READ EARLIER:
+${todo.map((r, i) => `W${i + 1}: ${rowTxt(r)}`).join('\n') || '(none to check)'}
+ALL ROWS FROM THIS SHEET, for spotting misses:
+${mine().map(r => '- ' + rowTxt(r)).join('\n')}
+
+Reply with only JSON in this shape:
+{"checks":[{"id":"W1","verdict":"right | wrong | not_on_sheet","fix":{"depth":"24\""},"evidence":["exact text"],"note":"one short reason"}],"rooms":[{"room":"201","room_name":"BREAK ROOM","items":[{"item":"","product":"","qty":"","width":"","height":"","depth":"","material":"","finish":"","countertop":"","counter_height":"","backsplash_height":"","hardware":"","special_conditions":"","evidence":["exact text"],"box":[20,30,28,40]}]}]}
+
+SHEET TEXT`), { signal, modelTier: 'default', images: ctx.imgs.length ? ctx.imgs.map(x => x.blob) : undefined });
+    let changed = 0, confirmed = 0, added = 0;
+    for (const c of (out && Array.isArray(out.checks) ? out.checks : [])) {
+      const r = todo[+String(c.id || '').replace(/\D/g, '') - 1]; if (!r) continue;
+      const prev = r.chk, n2 = (prev ? prev.n : 0) + 1;
+      if (c.verdict === 'right') {
+        if (prev && prev.status === 'corrected') r.chk = { ...prev, n: n2, note: (prev.note || '') + ' Checked again after the correction and confirmed.' };
+        else { r.chk = { status: 'confirmed', n: n2, note: c.note || '' }; if (prev) changed++; }
+        confirmed++; continue;
+      }
+      const fix = c.verdict === 'wrong' && c.fix && typeof c.fix === 'object' ? Object.entries(c.fix).map(([j, v]) => [RS_FROM_JSON[j] || (RS_LABEL[j] ? j : null), String(v ?? '').trim()]).filter(([f, v]) => f && v && normV(v) !== normV(r.f[f])) : [];
+      const okFix = !noText && fix.length && fix.every(([, v]) => textOnPage(set, n, v)) && !(prev && prev.status === 'corrected');
+      if (okFix) {
+        r.chk = { status: 'corrected', n: n2, was: fix.map(([f]) => `${RS_LABEL[f]} ${r.f[f] || '(blank)'}`).join(', '), note: c.note || '' };
+        for (const [f, v] of fix) r.f[f] = v; changed++;
+      } else {
+        const why = c.verdict === 'not_on_sheet' ? 'A second reading didn’t find this item on the sheet.'
+          : fix.length ? `A second reading suggests ${fix.map(([f, v]) => `${RS_LABEL[f]} ${v}`).join(', ')}, ${noText ? 'but this sheet has no text to confirm it against' : prev && prev.status === 'corrected' ? 'after it was already corrected once' : 'but that value isn’t in the sheet’s text'}.`
+          : 'A second reading didn’t confirm this row.';
+        r.chk = { status: 'disputed', n: n2, was: prev && prev.was, note: why + (c.note ? ' ' + c.note : '') };
+        if (!prev || prev.status !== 'disputed') changed++;
+      }
+    }
+    for (const nr of rsRowsFrom(out, set, n, ctx.label)) {
+      if (state.rs.rows.some(r => r.src && r.src.sid === set.id && r.src.n === n && normV(r.f.room) === normV(nr.f.room) && (normV(nr.f.item) ? normV(r.f.item) === normV(nr.f.item) : similar(r.f.desc, nr.f.desc) > 0.8))) continue;
+      nr.round = round; state.rs.rows.push(nr); added++;
+    }
+    drawRsTable(); updateIssueCount();
+    return { added, changed, confirmed, calls: 1, notes: [todo.length ? `read the sheet again for ${plural(todo.length, 'row')}: ${confirmed} confirmed, ${changed} corrected or flagged` : '', added ? `found ${plural(added, 'item')} the first reading missed` : 'nothing missing'] };
+  });
 }
 
 async function runRoomExtraction() {
@@ -2860,8 +3199,13 @@ async function runRoomExtraction() {
       if (res.notes) state.rs.sheetNotes[set.id + ':' + n] = res.notes; else delete state.rs.sheetNotes[set.id + ':' + n];
       done++; added += res.rows.length;
       drawRsTable(); drawRsPicker(); updateIssueCount(); scheduleWorkSave();
+      const log = await checkRoomSheet(set, n, res.ctx, rsUi.ctl.signal, t => { st.textContent = `${pageLabel(set, n)}, sheet ${i + 1} of ${list.length}: ${t}`; });
+      if (log) (state.rs.checks = state.rs.checks || {})[set.id + ':' + n] = log;
+      if (rsUi.ctl.signal.aborted) throw { code: 'cancelled' };
+      drawRsTable(); updateIssueCount(); scheduleWorkSave();
     }
-    st.textContent = `Finished ${plural(done, 'sheet')}: ${plural(added, 'item')} added. Check each row and tick “Verified” once it’s right.`;
+    const t = tallyChk(state.rs.rows.filter(r => r.src && list.some(x => x.set.id === r.src.sid && x.n === r.src.n)));
+    st.innerHTML = esc(`Finished ${plural(done, 'sheet')}: ${plural(added + t.added, 'item')} added.`) + (AC.on ? ` Checked automatically: ${t.confirmed} rows confirmed, ${t.corrected} corrected, ${t.added} added by a later look${t.disputed ? `, <span class="vbad">${t.disputed} need a person</span>` : ''}.` : '') + ' Check each row and tick “Verified” once it’s right.';
   } catch (e) {
     st.innerHTML = errCopy(e) + (done ? ` ${plural(done, 'sheet')} finished and ${done === 1 ? 'is' : 'are'} kept.` : '');
   } finally { $('#rsGo').disabled = false; $('#rsStop').hidden = true; }
@@ -2899,7 +3243,7 @@ function drawRsTable() {
     if (r.f.room !== lastRoom) { lastRoom = r.f.room; html += `<tr class="rs-room"><td colspan="${RS_FIELDS.length + 3}">Room ${esc(r.f.room || '(no room number)')} ${esc(r.f.roomName)}</td></tr>`; }
     html += `<tr data-row="${r.id}" class="${r.verified ? 'ok' : ''}"><td><input type="checkbox" data-rsver="${r.id}" ${r.verified ? 'checked' : ''} aria-label="Verified"></td>` +
       RS_FIELDS.map(([f, l]) => `<td class="${r.conf && r.conf.has(f) ? 'rs-conf' : ''}"><input type="text" data-rsid="${r.id}" data-f="${f}" value="${esc(r.f[f])}" aria-label="${esc(l)}" ${r.conf && r.conf.has(f) ? 'title="Another sheet shows a different value for this item"' : ''}></td>`).join('') +
-      `<td>${r.src ? `<button class="ref" data-pv="${r.src.sid}:${r.src.n}:${r.src.ci == null ? boxParam(r.src.box) : r.src.ci}" title="${esc((r.src.evidence || []).join(' | '))}">${esc(r.src.label)}</button>${r.src.evidence && r.src.evidence.length && r.src.evFound === 0 ? ' <span class="vbad" title="The quoted text wasn’t found on the sheet">check</span>' : ''}` : r.est ? `<span class="note">${esc(r.est)}</span>` : '<span class="note">Typed in</span>'}${r.edited && r.origin !== 'manual' ? ' <span class="note">edited</span>' : ''}</td>
+      `<td>${r.src ? `<button class="ref" data-pv="${r.src.sid}:${r.src.n}:${r.src.ci == null ? boxParam(r.src.box) : r.src.ci}" title="${esc((r.src.evidence || []).join(' | '))}">${esc(r.src.label)}</button>${r.src.evidence && r.src.evidence.length && r.src.evFound === 0 ? ' <span class="vbad" title="The quoted text wasn’t found on the sheet">check</span>' : ''}` : r.est ? `<span class="note">${esc(r.est)}</span>` : '<span class="note">Typed in</span>'}${r.edited && r.origin !== 'manual' ? ' <span class="note">edited</span>' : ''}${newBadge(r.round)}${chkBadge(r.chk)}${r.chk && (r.chk.status === 'disputed' || r.chk.status === 'corrected') ? `<br><span class="note">${esc(r.chk.note || '')}${r.chk.was ? ' Before: ' + esc(r.chk.was) : ''}</span>` : ''}</td>
       <td><button class="btn ghost small" data-rsdel="${r.id}" aria-label="Delete row">Delete</button></td></tr>`;
   }
   el.innerHTML = html + '</tbody></table></div>';
@@ -2943,7 +3287,7 @@ function mvConvert(v, isDim) {
   const x = parseDimInches(v); if (x == null) return v;
   return state.mv.units === 'mm' ? String(Math.round(x * 25.4 * 10) / 10) : String(Math.round(x * 1000) / 1000);
 }
-const MV_SYN = { room: ['room', 'room #', 'room number', 'location', 'area', 'room # s or name'], roomName: ['room name', 'location name'], item: ['item', 'tag', 'mark', 'item #', 'item number'], desc: ['product', 'product name', 'description', 'name', 'cabinet', 'item name', 'item to be priced'],
+const MV_SYN = { room: ['room', 'room #', 'room number', 'location', 'area', 'room # s or name'], roomName: ['room name', 'location name'], item: ['item', 'tag', 'mark', 'item #', 'item number', 'item tag', 'item to be priced'], desc: ['product', 'product name', 'description', 'name', 'cabinet', 'item name'],
   qty: ['qty', 'quantity', 'count'], width: ['width', 'w', 'length'], height: ['height', 'h'], depth: ['depth', 'd'], material: ['material', 'core', 'material name'], finish: ['finish', 'color', 'colour'],
   ctop: ['countertop', 'top', 'counter'], ctopHt: ['counter height', 'countertop height'], bsHt: ['backsplash height', 'splash height'], hardware: ['hardware'], notes: ['comments', 'comment', 'notes', 'note', 'special conditions'] };
 const nk = s => String(s || '').toLowerCase().replace(/[^a-z0-9#]+/g, ' ').trim();
@@ -2964,8 +3308,25 @@ function mvAutoMap() {
   }
   state.mv.map = map;
 }
+// Estimate columns. "ITEM TO BE PRICED" is the item identifier (201.01); the product name is in DESCRIPTION.
+function estCols(est) {
+  const H = est.headers.map(nk);
+  const find = (...pats) => H.findIndex(h => pats.some(p => p.test(h)));
+  return { room: find(/room/), item: find(/item to be priced|^item\b|product code|item code|^product$/), desc: find(/description|item name/), qty: find(/^qty|quantity/),
+    width: find(/^length|length$|^width|width$/), height: find(/^height|height$/), depth: find(/^depth|depth$/), finish: find(/finish id|^finish$|finish/), notes: find(/comment|modification|^notes?$/),
+    elev: find(/arch elev|^elev/), plan: find(/arch plan|^plan/), detail: find(/arch detail|^detail/) };
+}
+// Charges that aren't products (freight, tax, bonds…). A line is skipped only when it names one of these AND has no
+// item identifier. A $0 value is never a reason to skip: real products can be priced at $0.
+const NON_PRODUCT = /^(?:freight|shipping|delivery|crating|fuel surcharge|mobili[sz]ation|demobili[sz]ation|(?:performance |payment )?bonds?|permits?|(?:sales )?tax(?:es)?|insurance|overhead|profit|mark-?up|contingency|discount|escalation|general conditions|travel|per diem|lodging|sub-?total|grand total|total)\b/i;
+function estNonProduct(r, col) {
+  const cell = k => (col[k] >= 0 ? String(r[col[k]] ?? '').trim() : '');
+  if (cell('item') && !/^-?0(\.0+)?$|^\?$/.test(cell('item'))) return false;
+  const name = cell('desc') || r.map(c => String(c ?? '').trim()).find(c => /[a-z]{3}/i.test(c)) || '';
+  return NON_PRODUCT.test(name);
+}
 function mvSourceRows() {
-  if (state.mv.source === 'estimate') return state.mv.estimate ? state.mv.estimate.rows : [];
+  if (state.mv.source === 'estimate') { const est = state.mv.estimate; if (!est) return []; const col = estCols(est); return est.rows.filter(r => !estNonProduct(r, col)); }
   return [...state.rs.rows].sort((a, b) => a.f.room.localeCompare(b.f.room, undefined, { numeric: true }));
 }
 function mvOutput() {
@@ -2974,7 +3335,7 @@ function mvOutput() {
     const m = state.mv.map[h] || { type: 'blank' };
     if (m.type === 'fixed') return m.v || '';
     if (m.type === 'field' && r.f) return mvConvert(r.f[m.v] || '', RS_DIMS.has(m.v));
-    if (m.type === 'col' && Array.isArray(r)) { let v = String(r[m.v] ?? '').trim(); if (/^-?0(\.0+)?\s*(\/\s*[a-z]+)?$/i.test(v)) v = ''; return mvConvert(String(v), /width|height|depth|^w$|^h$|^d$/i.test(state.mv.estimate.headers[m.v] || '')); }
+    if (m.type === 'col' && Array.isArray(r)) { let v = String(r[m.v] ?? '').trim(); if (/^-?0(\.0+)?\s*(\/\s*[a-z]+)?$/i.test(v)) v = ''; return mvConvert(String(v), /width|length|height|depth|^w$|^l$|^h$|^d$/i.test(state.mv.estimate.headers[m.v] || '')); }
     return '';
   })));
 }
@@ -2994,7 +3355,8 @@ function parseSheet(wb, name, hi) {
   let end = hi;
   while (end + 1 < aoa.length && end - hi < 3) {
     const r = aoa[end + 1].map(c => String(c).trim()).filter(Boolean);
-    if (!r.length || r.filter(c => /^-?[\d.,$%]+$/.test(c)).length > r.length * 0.3) break;
+    // a second header row holds only words ("ARCH" over "ELEV"); any number or dimension (1, 201.01, 11'-11 1/2") means data has started
+    if (!r.length || r.some(c => /^-?[\d.,$%]+$/.test(c) || /^\d+\s*['"]|^\d+\s+\d+\/\d+\s*"?$/.test(c))) break;
     end++;
   }
   const width = Math.max(...aoa.slice(hi, end + 1).map(r => r.length), 0);
@@ -3030,17 +3392,14 @@ async function readTable(file, layoutOnly) {
 }
 function estimateToSchedule() {
   const est = state.mv.estimate; if (!est) return 0;
-  const H = est.headers.map(nk);
-  const find = (...pats) => H.findIndex(h => pats.some(p => p.test(h)));
-  const col = { room: find(/room/), item: find(/item to be priced|^item\b|product code|item code|^product$/), desc: find(/description|item name/), qty: find(/^qty|quantity/),
-    width: find(/^length|length$|^width|width$/), height: find(/^height|height$/), depth: find(/^depth|depth$/), finish: find(/finish id|^finish$|finish/), notes: find(/comment|modification|^notes?$/),
-    elev: find(/arch elev|^elev/), plan: find(/arch plan|^plan/), detail: find(/arch detail|^detail/) };
+  const col = estCols(est);
   const v = (r, k) => { const x = col[k] >= 0 ? String(r[col[k]] ?? '').trim() : ''; return /^-?0(\.0+)?\s*(\/\s*[a-z]+)?$/i.test(x) || x === '?' ? '' : x; };
   state.rs.rows = state.rs.rows.filter(r => !(r.origin === 'estimate' && !r.edited && !r.verified));
-  let n = 0;
+  let n = 0; est.skipped = [];
   est.rows.forEach((r, i) => {
     const item = v(r, 'item'), room = v(r, 'room');
     if (!item && !v(r, 'desc')) return;
+    if (estNonProduct(r, col)) { est.skipped.push(v(r, 'desc') || 'row ' + (est.rowNums ? est.rowNums[i] : i + 1)); return; }
     const notes = [v(r, 'notes'), v(r, 'elev') && 'Arch elev ' + v(r, 'elev'), v(r, 'detail') && 'Arch detail ' + v(r, 'detail'), v(r, 'plan') && 'Plan ' + v(r, 'plan')].filter(Boolean).join('; ');
     state.rs.rows.push({ id: 'r' + Math.random().toString(36).slice(2, 9), origin: 'estimate', edited: false, verified: false, src: null, est: `Estimate, ${est.sheet} row ${est.rowNums ? est.rowNums[i] : i + 1}`,
       f: { room, roomName: '', item, desc: v(r, 'desc'), qty: v(r, 'qty'), width: v(r, 'width'), height: v(r, 'height'), depth: v(r, 'depth'), material: '', finish: v(r, 'finish'), ctop: '', ctopHt: '', bsHt: '', hardware: '', notes } });
@@ -3062,15 +3421,15 @@ ${state.mv.layout.headers.map(h => '- ' + h).join('\n')}
 
 ${src}
 
-Reply with only JSON: {"map":{"<Microvellum column>": ${state.mv.source === 'estimate' ? '<column index number or null>' : '"<field id or null>"'}}}`, { modelTier: 'quick' });
+${state.mv.source === 'estimate' ? 'In these estimates, "ITEM TO BE PRICED" is the item identifier (such as 201.01), not the product name; the product name is in the description column.\n\n' : ''}Reply with only JSON: {"map":{"<Microvellum column>": ${state.mv.source === 'estimate' ? '<column index number or null>' : '"<field id or null>"'}}}`, { modelTier: 'quick' });
     for (const h of state.mv.layout.headers) {
       const v = res && res.map ? res.map[h] : null;
       if (v == null || v === '') continue;
       if (state.mv.source === 'estimate' && Number.isInteger(+v) && state.mv.estimate.headers[+v] !== undefined) state.mv.map[h] = { type: 'col', v: +v };
       else if (state.mv.source !== 'estimate' && RS_LABEL[v]) state.mv.map[h] = { type: 'field', v };
     }
-    st.textContent = 'Claude’s suggestions are filled in. Check each one.';
     drawMv(); scheduleWorkSave();
+    $('#mvStatus').textContent = 'Claude’s suggestions are filled in. Check each one.';   // after drawMv, which rebuilds the status line
   } catch (e) { st.innerHTML = errCopy(e); }
 }
 
@@ -3101,7 +3460,7 @@ function drawMv() {
       <div class="row"><label><input type="radio" name="mvsrc" value="schedule" ${mv.source !== 'estimate' ? 'checked' : ''}> Room schedule above (${plural(state.rs.rows.length, 'row')})</label>
         <label><input type="radio" name="mvsrc" value="estimate" ${mv.source === 'estimate' ? 'checked' : ''}> Estimate export from Energy</label>
         <label class="btn ghost small" for="mvEstFile">Open estimate (Excel or CSV)</label><input type="file" id="mvEstFile" accept=".xlsx,.xls,.csv,.txt" hidden></div>
-      ${mv.estimate ? `<p class="note">Estimate: ${esc(mv.estimate.name)}, tab “${esc(mv.estimate.sheet || '')}”, ${plural(mv.estimate.rows.length, 'line')}, ${plural(mv.estimate.headers.length, 'column')}. Headers read from row ${mv.estimate.headerRow || 1}.</p>
+      ${mv.estimate ? `<p class="note">Estimate: ${esc(mv.estimate.name)}, tab “${esc(mv.estimate.sheet || '')}”, ${plural(mv.estimate.rows.length, 'line')}, ${plural(mv.estimate.headers.length, 'column')}. Headers read from row ${mv.estimate.headerRow || 1}.${(() => { const col = estCols(mv.estimate), sk = mv.estimate.rows.filter(r => estNonProduct(r, col)); return sk.length ? ` Left out ${plural(sk.length, 'non-product line')} with no item number: ${esc(sk.map(r => String(r[col.desc] ?? '').trim() || '?').join(', '))}.` : ''; })()}</p>
         ${mv.estimate.sheets ? `<div class="row"><label>Tab <select id="mvEstSheet" ${mvWb ? '' : 'disabled'}>${mv.estimate.sheets.map(n => `<option ${n === mv.estimate.sheet ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></label>
           <label>Header row <input id="mvEstHdr" type="number" min="1" value="${mv.estimate.headerRow || 1}" style="width:5rem" ${mvWb ? '' : 'disabled'}></label>${mvWb ? '' : '<span class="note">Open the file again to switch tabs.</span>'}</div>` : ''}` : ''}
     </div>
@@ -3199,11 +3558,11 @@ function renderRooms() {
     $('#rsXlsx').onclick = () => saveFile(projBase() + ' - room schedule.xlsx', xlsxBlob([['Room schedule', rsAoa()]]));
     $('#rsEstFile').onchange = async e => {
       const f = e.target.files[0]; e.target.value = ''; if (!f) return;
-      try { state.mv.estimate = await readTable(f); mvAutoMap(); const n = estimateToSchedule(); $('#rsStatus').textContent = `Added ${plural(n, 'line')} from ${f.name}, tab “${state.mv.estimate.sheet}”. To use a different tab or header row, change it under Send to Microvellum, then click “Reload lines from the open estimate”.`; }
+      try { state.mv.estimate = await readTable(f); mvAutoMap(); const n = estimateToSchedule(); $('#rsStatus').textContent = `Added ${plural(n, 'line')} from ${f.name}, tab “${state.mv.estimate.sheet}”.${state.mv.estimate.skipped && state.mv.estimate.skipped.length ? ` Skipped ${plural(state.mv.estimate.skipped.length, 'non-product line')} (${esc(state.mv.estimate.skipped.join(', '))}).` : ''} To use a different tab or header row, change it under Send to Microvellum, then click “Reload lines from the open estimate”.`; }
       catch (err) { $('#rsStatus').innerHTML = `<span class="err">That file couldn’t be read: ${esc(err.message)}</span>`; }
       drawRsTable(); drawMv(); updateIssueCount(); scheduleWorkSave(); $('#rsFromEst').hidden = !state.mv.estimate;
     };
-    $('#rsFromEst').onclick = () => { const n = estimateToSchedule(); $('#rsStatus').textContent = `Reloaded ${plural(n, 'line')} from the estimate. Rows you edited or verified were kept.`; drawRsTable(); updateIssueCount(); scheduleWorkSave(); };
+    $('#rsFromEst').onclick = () => { const n = estimateToSchedule(); $('#rsStatus').textContent = `Reloaded ${plural(n, 'line')} from the estimate.${state.mv.estimate.skipped && state.mv.estimate.skipped.length ? ` Skipped ${plural(state.mv.estimate.skipped.length, 'non-product line')} (${esc(state.mv.estimate.skipped.join(', '))}).` : ''} Rows you edited or verified were kept.`; drawRsTable(); updateIssueCount(); scheduleWorkSave(); };
     $('#rsCsv').onclick = () => saveFile(projBase() + ' - room schedule.csv', rsAoa().map(r => r.map(csvCell).join(',')).join('\r\n'));
     $('#rsTable').addEventListener('change', e => {
       const t = e.target;
@@ -3399,19 +3758,38 @@ function drawMarks() {
 state.reRefs = {};
 async function readReRefs(set, n, signal) {
   const imgs = await sideImages(set, n, null, 5);
+  const norm = r => String(r).toUpperCase().replace(/^RE\s*:\s*/, '').replace(/\s+/g, '');
+  const reads = [];
+  let res = null;
+  for (let k = 1; k <= (AC.on ? Math.max(2, AC.rounds) : 1); k++) {
+    const one = await readReOnce(imgs, signal);
+    reads.push(one); res = res || one;
+    if (k > 1 && JSON.stringify([...new Set(one.refs.map(norm))].sort()) === JSON.stringify([...new Set(reads[k - 2].refs.map(norm))].sort())) break;   // two reads in a row agree
+    if (signal && signal.aborted) break;
+  }
+  // a reference read in at least two readings is kept as read; one seen only once is kept but marked uncertain
+  const seen = new Map();
+  for (const r of reads) for (const x of new Set(r.refs.map(norm))) seen.set(x, (seen.get(x) || 0) + 1);
+  const shown = new Map(); for (const r of reads) for (const x of r.refs) if (!shown.has(norm(x))) shown.set(norm(x), x);
+  const refs = [...shown.entries()].map(([k, v]) => v).slice(0, 40);
+  state.reRefs[set.id + ':' + n] = refs.length ? refs : ['(none)'];
+  (state.reRefsChk = state.reRefsChk || {})[set.id + ':' + n] = { reads: reads.length, uncertain: reads.length > 1 ? [...shown.entries()].filter(([k]) => seen.get(k) < 2).map(([, v]) => v) : [] };
+  const sheets = reads.map(r => r.sheet).filter(Boolean);
+  const sheet = sheets.sort((a, b) => sheets.filter(x => x === b).length - sheets.filter(x => x === a).length)[0];
+  const pg = set.pages[n - 1];
+  if (sheet && pg.sheet && pg.sheet.fromStamp && !pg.sheetRead) {
+    const v = parseSheetInput(String(sheet).trim());
+    if (v) { pg.sheet = { ...v, manual: true, fromStamp: true, fromClaude: true }; pg.sheetRead = true; }
+  }
+  return refs;
+}
+async function readReOnce(imgs, signal) {
   const res = await caps.sample.json(`These images show one CMI (Concepts in Millwork) shop drawing sheet: the whole sheet, then its four quarters enlarged. Every view title on the sheet ends with "RE:" followed by the architect’s reference that view was drawn from, such as "A1/AG102A" or "C4/A458" (detail or elevation, slash, architect sheet). Also read the sheet number in the title block.
 
 List every architect reference exactly as written. Ignore "RE: -" or empty references.
 
 Reply with only JSON: {"sheet":"title block sheet number or empty","refs":["A1/AG102A"]}`, { signal, modelTier: 'quick', images: imgs.map(x => x.blob) });
-  const refs = (res && Array.isArray(res.refs) ? res.refs : []).map(String).filter(r => /[A-Z]{1,3}[-.]?\d/i.test(r)).slice(0, 40);
-  state.reRefs[set.id + ':' + n] = refs.length ? refs : ['(none)'];
-  const pg = set.pages[n - 1];
-  if (res && res.sheet && pg.sheet && pg.sheet.fromStamp && !pg.sheetRead) {
-    const v = parseSheetInput(String(res.sheet).trim());
-    if (v) { pg.sheet = { ...v, manual: true, fromStamp: true, fromClaude: true }; pg.sheetRead = true; }
-  }
-  return refs;
+  return { sheet: res && res.sheet ? String(res.sheet).trim() : '', refs: (res && Array.isArray(res.refs) ? res.refs : []).map(String).filter(r => /[A-Z]{1,3}[-.]?\d/i.test(r)).slice(0, 40) };
 }
 
 /* ---------- Scoring a drawing review against the real redlines ---------- */
@@ -3575,6 +3953,35 @@ function drawDwgAskScope() {
   $('#daMarksL').hidden = !D.sets.some(s => s.pages.some(p => (p.marks || []).length));
 }
 
+function drawDwgAnswer(A, checking) {
+  const out = $('#daOut'); if (!out) return;
+  const { pages, marks, specRecs, how } = A;
+    const srcHtml = s => {
+      const ref = String(s.ref || '').trim();
+      let m = /^P(\d+)$/i.exec(ref);
+      if (m && pages[+m[1] - 1]) { const { set, pg } = pages[+m[1] - 1]; const bx = toPageBox(s.box, null); return s.text ? rvQuoteHtml(s.text, set, pg.n, s.from_image, bx) : `<button class="ref" data-pv="${set.id}:${pg.n}:${boxParam(bx)}">${esc(pageLabel(set, pg.n))}</button>`; }
+      m = /^K(\d+)$/i.exec(ref);
+      if (m && marks[+m[1] - 1]) { const x = marks[+m[1] - 1], ok = verifyQuote(s.text, x.mk.t); return `<span class="cite"><span class="q${ok ? '' : ' bad'}">${esc(s.text || x.mk.t)}</span> <button class="ref" data-pv="${x.set.id}:${x.pg.n}:m${x.i}">Markup by ${esc(x.mk.a || 'reviewer')}, ${esc(pageLabel(x.set, x.pg.n))}</button>${ok ? '' : ' <span class="vbad">Quote not found in the markup. Check it.</span>'}</span>`; }
+      if (/^R\d+$/i.test(ref)) return citeHtml({ ref, quote: s.text }, specResolver);
+      return `<span class="note">Unknown source ${esc(ref)}</span>`;
+    };
+    const pts = A.points;
+    const askWhere = p => whereBtn((Array.isArray(p.sources) ? p.sources : []).map(s => {
+      const m = /^P(\d+)$/i.exec(String(s.ref || '').trim()); if (m && pages[+m[1] - 1]) { const { set, pg } = pages[+m[1] - 1]; const l = locate(set, pg.n, s.text, toPageBox(s.box, null)); return { sid: set.id, n: pg.n, pv: l.pv, exact: l.exact, label: pageLabel(set, pg.n), text: s.text || '' }; }
+      const k = /^K(\d+)$/i.exec(String(s.ref || '').trim()); if (k && marks[+k[1] - 1]) { const x = marks[+k[1] - 1]; return { sid: x.set.id, n: x.pg.n, pv: 'm' + x.i, exact: true, label: `Markup by ${x.mk.a || 'reviewer'}, ${pageLabel(x.set, x.pg.n)}`, text: x.mk.t.slice(0, 120) }; }
+      return null;
+    }));
+    out.innerHTML = `<div class="answer">
+      <h2>Answer</h2><p class="lead">${esc(A.answer)}</p>
+      ${checking ? `<p class="note chk-run">${esc(checking)}</p>` : checkLogHtml(A.check, A.points)}
+      ${pts.map(p => `<div class="pt"><p>${esc(p.statement)}${newBadge(p.round)}${chkBadge(p.chk)}</p>${chkNote(p.chk)}${(Array.isArray(p.sources) ? p.sources : []).map(srcHtml).join('<br>')}${askWhere(p)}</div>`).join('')}
+      ${A.not_found ? `<div class="warn"><b>Not shown in what was read:</b> ${esc(A.not_found)}</div>` : ''}
+      <details class="read"><summary>What Claude looked at</summary><ul>
+        ${pages.map(({ set, pg }) => `<li><button class="ref" data-pv="${set.id}:${pg.n}:">${esc(pageLabel(set, pg.n))}</button> ${esc(set.kind)}: ${esc(set.name)}</li>`).join('')}
+        ${marks.length ? `<li>${plural(marks.length, 'reviewer markup')}</li>` : ''}${specRecs.length ? `<li>${plural(specRecs.length, 'spec paragraph')}</li>` : ''}</ul>
+        <p class="note">Chosen from ${esc(how)}. If the answer is on a different sheet, set “Look at” to “One sheet…” and pick it.</p></details>
+    </div>`;
+}
 async function runDwgAsk() {
   if (!caps.sample) return;
   const q = $('#daQ').value.trim(), out = $('#daOut');
@@ -3642,30 +4049,52 @@ Question: ${q}
 ${sheetText}
 ${marks.length ? `\nREVIEWER MARKUPS:\n${marks.map((x, i) => `[K${i + 1}] (${pageLabel(x.set, x.pg.n)}, by ${x.mk.a || 'unknown'}) ${x.mk.t.replace(/\s+/g, ' ')}`).join('\n')}\n` : ''}${specRecs.length ? `\nSPEC PASSAGES:\n${specRecs.map(r => passageLine(r, 'R' + r.rid)).join('\n')}\n` : ''}`;
     const res = await caps.sample.json(prompt, { signal: dAsk.ctl.signal, modelTier: 'default', images: imgs.length ? imgs : undefined });
-    const srcHtml = s => {
-      const ref = String(s.ref || '').trim();
-      let m = /^P(\d+)$/i.exec(ref);
-      if (m && pages[+m[1] - 1]) { const { set, pg } = pages[+m[1] - 1]; const bx = toPageBox(s.box, null); return s.text ? rvQuoteHtml(s.text, set, pg.n, s.from_image, bx) : `<button class="ref" data-pv="${set.id}:${pg.n}:${boxParam(bx)}">${esc(pageLabel(set, pg.n))}</button>`; }
-      m = /^K(\d+)$/i.exec(ref);
-      if (m && marks[+m[1] - 1]) { const x = marks[+m[1] - 1], ok = verifyQuote(s.text, x.mk.t); return `<span class="cite"><span class="q${ok ? '' : ' bad'}">${esc(s.text || x.mk.t)}</span> <button class="ref" data-pv="${x.set.id}:${x.pg.n}:m${x.i}">Markup by ${esc(x.mk.a || 'reviewer')}, ${esc(pageLabel(x.set, x.pg.n))}</button>${ok ? '' : ' <span class="vbad">Quote not found in the markup. Check it.</span>'}</span>`; }
-      if (/^R\d+$/i.test(ref)) return citeHtml({ ref, quote: s.text }, specResolver);
-      return `<span class="note">Unknown source ${esc(ref)}</span>`;
-    };
-    const pts = Array.isArray(res?.points) ? res.points : [];
-    const askWhere = p => whereBtn((Array.isArray(p.sources) ? p.sources : []).map(s => {
-      const m = /^P(\d+)$/i.exec(String(s.ref || '').trim()); if (m && pages[+m[1] - 1]) { const { set, pg } = pages[+m[1] - 1]; const l = locate(set, pg.n, s.text, toPageBox(s.box, null)); return { sid: set.id, n: pg.n, pv: l.pv, exact: l.exact, label: pageLabel(set, pg.n), text: s.text || '' }; }
-      const k = /^K(\d+)$/i.exec(String(s.ref || '').trim()); if (k && marks[+k[1] - 1]) { const x = marks[+k[1] - 1]; return { sid: x.set.id, n: x.pg.n, pv: 'm' + x.i, exact: true, label: `Markup by ${x.mk.a || 'reviewer'}, ${pageLabel(x.set, x.pg.n)}`, text: x.mk.t.slice(0, 120) }; }
-      return null;
-    }));
-    out.innerHTML = `<div class="answer">
-      <h2>Answer</h2><p class="lead">${esc(res?.answer || '')}</p>
-      ${pts.map(p => `<div class="pt"><p>${esc(p.statement)}</p>${(Array.isArray(p.sources) ? p.sources : []).map(srcHtml).join('<br>')}${askWhere(p)}</div>`).join('')}
-      ${res?.not_found ? `<div class="warn"><b>Not shown in what was read:</b> ${esc(res.not_found)}</div>` : ''}
-      <details class="read"><summary>What Claude looked at</summary><ul>
-        ${pages.map(({ set, pg }) => `<li><button class="ref" data-pv="${set.id}:${pg.n}:">${esc(pageLabel(set, pg.n))}</button> ${esc(set.kind)}: ${esc(set.name)}</li>`).join('')}
-        ${marks.length ? `<li>${plural(marks.length, 'reviewer markup')}</li>` : ''}${specRecs.length ? `<li>${plural(specRecs.length, 'spec paragraph')}</li>` : ''}</ul>
-        <p class="note">Chosen from ${esc(how)}. If the answer is on a different sheet, set “Look at” to “One sheet…” and pick it.</p></details>
-    </div>`;
+    const A = dAsk.last = { q, pages, marks, specRecs, how, answer: res?.answer || '', not_found: res?.not_found || '',
+      points: (Array.isArray(res?.points) ? res.points : []).filter(p => p && p.statement).map(p => ({ statement: String(p.statement), sources: Array.isArray(p.sources) ? p.sources : [] })) };
+    drawDwgAnswer(A);
+    // a source backs a correction only when its text is really on the sheet, markup or spec paragraph
+    const srcOk = x => { const ref = String(x.ref || '').trim(); let m = /^P(\d+)$/i.exec(ref);
+      if (m && pages[+m[1] - 1]) return !!x.text && textOnPage(pages[+m[1] - 1].set, pages[+m[1] - 1].pg.n, x.text);
+      m = /^K(\d+)$/i.exec(ref); if (m && marks[+m[1] - 1]) return verifyQuote(x.text, marks[+m[1] - 1].mk.t);
+      if (/^R\d+$/i.test(ref)) { const r = specResolver(ref); return !!r && verifyQuote(x.text, r.text); }
+      return false; };
+    const srcLine = x => `${x.ref} "${x.text || ''}"${x.from_image ? ' (read from the image)' : ''}`;
+    A.check = await autoCheck('the answer', dAsk.ctl.signal, t => drawDwgAnswer(A, t), async round => {
+      const todo = A.points.filter(needsCheck);
+      drawDwgAnswer(A, `Round ${round}: reading the sheets again to check ${plural(todo.length, 'point')} and look for anything missed`);
+      const chk = await caps.sample.json(prompt.replace(/\nReply with only JSON in this shape:[\s\S]*?\nQuestion: /, `
+This is a second look. An earlier answer is listed under ANSWER POINTS. Check each point against the material: "supported" if it shows exactly this, "partly" if a value or detail is wrong (give the corrected "statement" and its "sources"), "not_supported" if the material doesn't show it. Then list points the answer misses, in the same form as the answer points.
+
+Reply with only JSON in this shape:
+{"checks":[{"id":"A1","verdict":"supported | partly | not_supported","statement":"corrected statement or empty","sources":[{"ref":"P1","text":"exact text","box":[30,40,36,43],"from_image":false}],"note":"one short reason"}],"missing":[{"statement":"...","sources":[{"ref":"P1","text":"exact text","box":[30,40,36,43],"from_image":false}]}]}
+
+ANSWER POINTS:
+${todo.map((p, i) => `A${i + 1}: ${p.statement}\n  sources: ${(p.sources || []).map(srcLine).join('; ') || 'none'}`).join('\n')}
+
+Question: `), { signal: dAsk.ctl.signal, modelTier: 'default', images: imgs.length ? imgs : undefined });
+      let changed = 0, confirmed = 0, added = 0;
+      for (const c of (chk && Array.isArray(chk.checks) ? chk.checks : [])) {
+        const p = todo[+String(c.id || '').replace(/\D/g, '') - 1]; if (!p) continue;
+        const prev = p.chk, n = (prev ? prev.n : 0) + 1, srcs = Array.isArray(c.sources) ? c.sources : [];
+        const ownOk = (p.sources || []).length && p.sources.every(x => srcOk(x) || x.from_image);
+        if (c.verdict === 'supported' && ownOk) {
+          if (prev && prev.status === 'corrected') p.chk = { ...prev, n, note: (prev.note || '') + ' Checked again after the correction and confirmed.' };
+          else { p.chk = { status: 'confirmed', n, note: c.note || '' }; if (prev) changed++; }
+          confirmed++;
+        } else if (c.verdict === 'partly' && c.statement && srcs.length && srcs.every(srcOk) && !(prev && prev.status === 'corrected')) {
+          p.chk = { status: 'corrected', n, was: p.statement, note: c.note || '' }; p.statement = String(c.statement); p.sources = srcs; changed++;
+        } else {
+          p.chk = { status: 'disputed', n, was: prev && prev.was, note: (c.note || 'A second reading didn’t confirm this.') + (ownOk ? '' : ' Its source text wasn’t found on the sheet.') + (c.verdict === 'partly' && c.statement ? ` Suggested: ${c.statement}` : '') };
+          if (!prev || prev.status !== 'disputed') changed++;
+        }
+      }
+      for (const m of (chk && Array.isArray(chk.missing) ? chk.missing : [])) {
+        if (!m || !m.statement || A.points.some(x => similar(x.statement, m.statement) > 0.8 || (x.chk && x.chk.was && similar(x.chk.was, m.statement) > 0.8))) continue;
+        A.points.push({ statement: String(m.statement), sources: Array.isArray(m.sources) ? m.sources : [], round }); added++;
+      }
+      return { added, changed, confirmed, calls: 1, notes: [todo.length ? `read the sheets again for ${plural(todo.length, 'point')}: ${confirmed} confirmed, ${changed} corrected or flagged` : '', added ? `found ${plural(added, 'point')} the answer missed` : 'nothing missing'] };
+    });
+    drawDwgAnswer(A);
   } catch (e) { out.innerHTML = `<div class="warn">${errCopy(e)}</div>`; }
   finally { $('#daGo').disabled = false; $('#daStop').hidden = true; applyCaps(); }
 }
@@ -3818,77 +4247,50 @@ document.addEventListener('click', e => {
   openSpecPreview(b.dataset.specpv.split('-').map(Number).filter((v, i, a) => v && a.indexOf(v) === i), b.dataset.q || '');
 });
 
-/* ---------- Deep check: a loop that goes back over the project until nothing new turns up ---------- */
-state.deep = { log: [], xrefs: [], running: false };
-const dp = { ctl: null, keys: null, passes: { spec: true, verify: true, cmp: true, dwg: true, xref: true }, rounds: 3 };
-const simTokens = s => new Set(tokens(String(s || '')).filter(w => w.length > 2));
-function similar(a, b) { const A = simTokens(a), B = simTokens(b); if (!A.size || !B.size) return 0; let n = 0; for (const w of A) if (B.has(w)) n++; return n / Math.min(A.size, B.size); }
-function chkBadge(c) {
-  if (!c) return '';
-  const t = { confirmed: ['Checked ✓', 'ok'], corrected: ['Corrected by deep check', 'fix'], disputed: ['Deep check disagrees', 'bad'] }[c.status] || ['', ''];
-  return t[0] ? ` <span class="chk-b chk-${t[1]}" title="${esc((c.note || '') + (c.was ? ' Before: ' + c.was : '') + (c.n ? ` Checked ${c.n}×.` : ''))}">${t[0]}${c.n > 1 ? ' ×' + c.n : ''}</span>` : '';
-}
-const newBadge = r => r ? ` <span class="chk-b chk-new" title="Found by deep check round ${r}, not in the first pass">Added in round ${r}</span>` : '';
-const passAvail = () => ({
-  spec: state.sections.length > 0, verify: state.sections.length > 0,
-  cmp: state.cmpItems.some(it => it.status !== 'match') && !!state.other,
-  dwg: (state.reviews || []).some(r => r.items.some(it => it.status !== 'match')),
-  xref: state.rs.rows.length > 0 || state.dwg.sets.length > 0
-});
-
-/* pass 1: hunt for requirements the summaries missed */
-async function passSpecHunt(round, signal, say) {
-  let added = 0, calls = 0;
-  for (const s of state.sections.filter(x => dp.keys.has(x.key))) {
-    let sum = state.summaries.get(s.key);
-    if (!sum || !sum.points || sum.error) {
-      say(`Reading ${s.num} ${s.title} for the first time`);
-      await summarizeSection(s); calls++;
-      sum = state.summaries.get(s.key);
-      if (!sum || sum.error) throw Object.assign(new Error('summary failed'), { code: 'error' });
-      if (round > 1) for (const p of sum.points) p.round = round;
-      continue;
+/* ---------- Automatic checking: every AI answer is re-checked in rounds until nothing changes ---------- */
+const AC = (() => { try { const v = JSON.parse(localStorage.getItem('specdesk.autocheck.v1') || 'null'); if (v && typeof v.on === 'boolean') return { on: v.on, rounds: Math.min(5, Math.max(1, +v.rounds || 5)) }; } catch {} return { on: true, rounds: 5 }; })();
+function saveAC() { try { localStorage.setItem('specdesk.autocheck.v1', JSON.stringify(AC)); } catch {} }
+// an item is checked when it has never been checked, or once more after it was corrected or disputed
+const needsCheck = x => !x.chk || ((x.chk.status === 'disputed' || x.chk.status === 'corrected') && x.chk.n < 2);
+// Runs roundFn(round) until a round adds nothing and changes nothing, or the round limit. Never throws:
+// a stop or an error ends the loop and everything checked so far is kept.
+async function autoCheck(what, signal, say, roundFn) {
+  if (!AC.on || !caps.sample) return null;
+  const log = { at: new Date().toISOString(), what, rounds: [], stopped: '' };
+  try {
+    for (let round = 1; round <= AC.rounds; round++) {
+      say(`Checking ${what} against the documents: round ${round} of up to ${AC.rounds}…`);
+      const R = Object.assign({ round, added: 0, changed: 0, confirmed: 0, calls: 0, notes: [] }, await roundFn(round));
+      log.rounds.push(R);
+      if (!R.added && !R.changed) { log.stopped = round === 1 ? 'Settled on the first check: nothing new turned up and nothing changed.' : `Settled after round ${round}: that round found nothing new and changed nothing.`; break; }
+      if (round === AC.rounds) log.stopped = `Stopped at the ${AC.rounds}-round limit while still finding changes. Look closely at anything flagged.`;
     }
-    if (round === 1) continue;            // the first pass already read it; later rounds look for misses
-    const chunks = chunkRecords(s.records, 40000);
-    for (let i = 0; i < chunks.length; i++) {
-      say(`Round ${round}: looking for anything missed in ${s.num}${chunks.length > 1 ? ` (part ${i + 1} of ${chunks.length})` : ''}`);
-      const have = sum.points.map((p, k) => `- ${p.statement}`).join('\n').slice(0, 20000);
-      const out = await caps.sample.json(`You are double-checking a summary of one construction specification section for a millwork subcontractor. The summary below was made earlier. Read every passage again, slowly, and list ONLY requirements the summary is missing or gets wrong: values, units, standards, manufacturers, model numbers, submittals, mockups, testing, warranties, extra materials, coordination, execution, exceptions and "or equal" language. Treat a requirement as missing if the summary leaves out a value or condition that matters.
-
-Every item must cite its passage id with an exact quote (5 to 25 words). If nothing is missing, return an empty list; don't repeat what's already there.
-
-Reply with only JSON: {"missing":[{"category":"Scope | Products | Performance | Submittals | Quality assurance | Testing | Warranty | Execution | Coordination | Other","statement":"one clear sentence","citations":[{"ref":"R12","quote":"exact words"}]}]}
-
-ALREADY IN THE SUMMARY:
-${have}
-
-Section: ${s.num} ${s.title}
-Passages:
-${chunks[i].map(r => passageLine(r, 'R' + r.rid)).join('\n')}`, { signal, modelTier: 'default' });
-      calls++;
-      for (const p of (out && Array.isArray(out.missing) ? out.missing : [])) {
-        if (!p || !p.statement) continue;
-        if (sum.points.some(q => similar(q.statement, p.statement) > 0.8)) continue;
-        sum.points.push({ category: p.category || 'Other', statement: p.statement, citations: Array.isArray(p.citations) ? p.citations : [], round });
-        added++;
-      }
-    }
+  } catch (e) {
+    log.stopped = (e && e.code === 'cancelled' ? 'Checking was stopped.' : 'Checking stopped early: ' + errCopy(e)) + ' Everything checked so far is kept.';
+    log.cut = true;
   }
-  return { added, calls };
+  return log;
+}
+function tallyChk(items) {
+  const t = { confirmed: 0, corrected: 0, disputed: 0, added: 0 };
+  for (const x of items) { if (x.round) t.added++; const st = x.chk && x.chk.status; if (st && t[st] != null) t[st]++; }
+  return t;
+}
+function checkLogHtml(log, items) {
+  if (!log) return AC.on ? '' : '<p class="note">Automatic checking is off. Turn it on in the Deep check tab.</p>';
+  const t = tallyChk(items || []);
+  const parts = [t.confirmed && `${t.confirmed} confirmed`, t.corrected && `${t.corrected} corrected`, t.added && `${t.added} added by a later look`, t.disputed && `<span class="vbad">${t.disputed} need a person</span>`].filter(Boolean);
+  return `<details class="chk-log"><summary><b>Checked automatically</b> in ${plural(log.rounds.length, 'round')}${parts.length ? ': ' + parts.join(', ') : ''}. ${esc(log.stopped)}</summary>
+    <ol>${log.rounds.map(R => `<li>Round ${R.round}: ${esc(R.notes.filter(Boolean).join('; ') || 'nothing left to check')}</li>`).join('')}</ol></details>`;
 }
 
-/* pass 2: check every requirement against its own source */
-async function passVerify(round, signal, say) {
-  const todo = [];
-  for (const s of state.sections.filter(x => dp.keys.has(x.key))) {
-    const sum = state.summaries.get(s.key); if (!sum || !sum.points) continue;
-    for (const p of sum.points) if (!p.chk || p.chk.status === 'disputed' && p.chk.n < 2) todo.push({ s, p });
-  }
+// Check statements against the spec paragraphs they cite. A correction is only taken when the cited quotes are
+// really in the spec; a second correction of the same statement goes to a person instead.
+async function verifyStatements(todo, round, signal, say) {
   let changed = 0, confirmed = 0, calls = 0;
   for (let i = 0; i < todo.length; i += 20) {
     const batch = todo.slice(i, i + 20);
-    say(`Round ${round}: checking requirements ${i + 1}–${i + batch.length} of ${todo.length} against their sources`);
+    say(`Round ${round}: checking statements ${i + 1}–${i + batch.length} of ${todo.length} against their sources`);
     const blocks = batch.map((x, k) => {
       const src = (x.p.citations || []).map(c => { const r = specResolver(c.ref); return r ? `  [${c.ref}] ${r.label}: ${r.text}` : `  [${c.ref}] (source not found)`; }).join('\n');
       return `V${k + 1}: ${x.p.statement}\n${src || '  (no source cited)'}`;
@@ -3905,12 +4307,94 @@ ${blocks}`, { signal, modelTier: 'default' });
       const x = batch[+String(c.id || '').replace(/\D/g, '') - 1]; if (!x) continue;
       const prev = x.p.chk, n = (prev ? prev.n : 0) + 1;
       const quotesOk = (x.p.citations || []).length && x.p.citations.every(q => { const r = specResolver(q.ref); return r && verifyQuote(q.quote, r.text); });
-      if (c.verdict === 'supported' && quotesOk) { x.p.chk = { status: 'confirmed', n, note: c.note || '' }; confirmed++; }
-      else if (c.verdict === 'partly' && c.fix) { x.p.chk = { status: 'corrected', n, was: x.p.statement, note: c.note || '' }; x.p.statement = c.fix; changed++; }
-      else { x.p.chk = { status: 'disputed', n, note: (c.note || '') + (quotesOk ? '' : ' The quoted words weren’t found in the spec.') }; if (!prev || prev.status !== 'disputed') changed++; }
+      if (c.verdict === 'supported' && quotesOk) {
+        if (prev && prev.status === 'corrected') x.p.chk = { ...prev, n, note: (prev.note || '') + ' Checked again after the correction and confirmed.' };
+        else { x.p.chk = { status: 'confirmed', n, note: c.note || '' }; if (prev) changed++; }
+        confirmed++;
+      }
+      else if (c.verdict === 'partly' && c.fix && quotesOk && !(prev && prev.status === 'corrected')) { x.p.chk = { status: 'corrected', n, was: x.p.statement, note: c.note || '' }; x.p.statement = c.fix; changed++; }
+      else { x.p.chk = { status: 'disputed', n, was: prev && prev.was, note: (c.note || '') + (quotesOk ? '' : ' The quoted words weren’t found in the spec.') + (c.verdict === 'partly' && c.fix ? ` Suggested correction: ${c.fix}` : '') }; if (!prev || prev.status !== 'disputed') changed++; }
     }
   }
   return { changed, confirmed, calls, checked: todo.length };
+}
+
+/* ---------- Deep check: a loop that goes back over the project until nothing new turns up ---------- */
+state.deep = { log: [], xrefs: [], running: false };
+const dp = { ctl: null, keys: null, passes: { spec: true, verify: true, cmp: true, dwg: true, xref: true }, rounds: 3 };
+const simTokens = s => new Set(tokens(String(s || '')).filter(w => w.length > 2));
+function similar(a, b) { const A = simTokens(a), B = simTokens(b); if (!A.size || !B.size) return 0; let n = 0; for (const w of A) if (B.has(w)) n++; return n / Math.min(A.size, B.size); }
+function chkBadge(c) {
+  if (!c) return '';
+  const t = { confirmed: ['Checked ✓', 'ok'], corrected: ['Corrected by deep check', 'fix'], disputed: ['Deep check disagrees', 'bad'] }[c.status] || ['', ''];
+  return t[0] ? ` <span class="chk-b chk-${t[1]}" title="${esc((c.note || '') + (c.was ? ' Before: ' + c.was : '') + (c.n ? ` Checked ${c.n}×.` : ''))}">${t[0]}${c.n > 1 ? ' ×' + c.n : ''}</span>` : '';
+}
+const chkNote = c => c && (c.status === 'disputed' || c.status === 'corrected') ? `<p class="note chk-note">${c.status === 'disputed' ? '<b>Needs a person:</b> ' : ''}${esc(c.note || '')}${c.was ? ` <span class="note">Before: ${esc(c.was)}</span>` : ''}</p>` : '';
+const newBadge = r => r ? ` <span class="chk-b chk-new" title="Found by deep check round ${r}, not in the first pass">Added in round ${r}</span>` : '';
+const passAvail = () => ({
+  spec: state.sections.length > 0, verify: state.sections.length > 0,
+  cmp: state.cmpItems.some(it => it.status !== 'match') && !!state.other,
+  dwg: (state.reviews || []).some(r => r.items.some(it => it.status !== 'match')),
+  xref: state.rs.rows.length > 0 || state.dwg.sets.length > 0
+});
+
+/* look again through one section for requirements its summary is missing */
+async function huntSection(s, sum, round, signal, say) {
+  let added = 0, calls = 0;
+  const chunks = chunkRecords(s.records, 40000);
+  for (let i = 0; i < chunks.length; i++) {
+    say(`Round ${round}: looking for anything missed in ${s.num}${chunks.length > 1 ? ` (part ${i + 1} of ${chunks.length})` : ''}`);
+    const have = sum.points.map(p => `- ${p.statement}`).join('\n').slice(0, 20000);
+    const out = await caps.sample.json(`You are double-checking a summary of one construction specification section for a millwork subcontractor. The summary below was made earlier. Read every passage again, slowly, and list ONLY requirements the summary is missing or gets wrong: values, units, standards, manufacturers, model numbers, submittals, mockups, testing, warranties, extra materials, coordination, execution, exceptions and "or equal" language. Treat a requirement as missing if the summary leaves out a value or condition that matters.
+
+Every item must cite its passage id with an exact quote (5 to 25 words). If nothing is missing, return an empty list; don't repeat what's already there.
+
+Reply with only JSON: {"missing":[{"category":"Scope | Products | Performance | Submittals | Quality assurance | Testing | Warranty | Execution | Coordination | Other","statement":"one clear sentence","citations":[{"ref":"R12","quote":"exact words"}]}]}
+
+ALREADY IN THE SUMMARY:
+${have}
+
+Section: ${s.num} ${s.title}
+Passages:
+${chunks[i].map(r => passageLine(r, 'R' + r.rid)).join('\n')}`, { signal, modelTier: 'default' });
+    calls++;
+    for (const p of (out && Array.isArray(out.missing) ? out.missing : [])) {
+      if (!p || !p.statement) continue;
+      if (sum.points.some(q => similar(q.statement, p.statement) > 0.8 || (q.chk && q.chk.was && similar(q.chk.was, p.statement) > 0.8))) continue;
+      sum.points.push({ category: p.category || 'Other', statement: p.statement, citations: Array.isArray(p.citations) ? p.citations : [], round });
+      added++;
+    }
+  }
+  return { added, calls };
+}
+
+/* pass 1: hunt for requirements the summaries missed */
+async function passSpecHunt(round, signal, say) {
+  let added = 0, calls = 0;
+  for (const s of state.sections.filter(x => dp.keys.has(x.key))) {
+    let sum = state.summaries.get(s.key);
+    if (!sum || !sum.points || sum.error) {
+      say(`Reading ${s.num} ${s.title} for the first time`);
+      await summarizeSection(s, { noCheck: true }); calls++;   // the deep check verifies it in its own passes
+      sum = state.summaries.get(s.key);
+      if (!sum || sum.error) throw Object.assign(new Error('summary failed'), { code: 'error' });
+      if (round > 1) for (const p of sum.points) p.round = round;
+      continue;
+    }
+    if (round === 1) continue;            // the first pass already read it; later rounds look for misses
+    const h = await huntSection(s, sum, round, signal, say); added += h.added; calls += h.calls;
+  }
+  return { added, calls };
+}
+
+/* pass 2: check every requirement against its own source */
+async function passVerify(round, signal, say) {
+  const todo = [];
+  for (const s of state.sections.filter(x => dp.keys.has(x.key))) {
+    const sum = state.summaries.get(s.key); if (!sum || !sum.points) continue;
+    for (const p of sum.points) if (needsCheck(p)) todo.push({ s, p });
+  }
+  return verifyStatements(todo, round, signal, say);
 }
 
 /* pass 3: look again for anything the comparison called a gap or unclear */
@@ -3919,37 +4403,47 @@ async function passCompare(round, signal, say) {
     (['gap', 'unclear'].includes(it.status) || (it.other && !(otherResolver(it.other.ref) && verifyQuote(it.other.quote, otherResolver(it.other.ref).text)))));
   let changed = 0, confirmed = 0, calls = 0;
   const kind = state.other.kindLabel.toLowerCase();
-  for (let i = 0; i < todo.length; i++) {
-    const it = todo[i];
-    say(`Round ${round}: searching the ${kind} again for “${it.topic}” (${i + 1} of ${todo.length})`);
-    const sr = it.spec ? specResolver(it.spec.ref) : null;
-    const q = [it.topic, it.note, it.spec && it.spec.quote, sr && sr.text].filter(Boolean).join(' ');
-    const hits = scoreQuery(state.other.idx, q).slice(0, 14).map(([k]) => state.other.chunks[k]).sort((a, b) => a.i - b.i);
-    const out = await caps.sample.json(`An earlier check said this specification requirement was "${it.status}" in the ${kind}. Look again, carefully, at the ${kind} passages below, which were found with a fresh search. Watch for different wording, abbreviations, exclusions and alternates.
+  // several requirements per request, each with its own fresh search results
+  const where = c => c.where || (c.page ? 'p. ' + c.page : 'paragraph ' + (c.i + 1));
+  for (let i = 0; i < todo.length; i += 8) {
+    const batch = todo.slice(i, i + 8), shown = new Map();
+    say(`Round ${round}: searching the ${kind} again for ${batch.length === 1 ? `“${batch[0].topic}”` : `requirements ${i + 1}–${i + batch.length}`} (${todo.length} in all)`);
+    const blocks = batch.map((it, k) => {
+      const sr = it.spec ? specResolver(it.spec.ref) : null;
+      const q = [it.topic, it.note, it.spec && it.spec.quote, sr && sr.text].filter(Boolean).join(' ');
+      const hits = scoreQuery(state.other.idx, q).slice(0, batch.length > 1 ? 8 : 14).map(([x]) => state.other.chunks[x]);
+      for (const c of hits) shown.set(c.i, c);
+      return `G${k + 1}: earlier said "${it.status}". Requirement (spec ${it.sec}${sr ? ', ' + sr.label : ''}): ${sr ? sr.text : it.topic}\n  Passages found for it: ${hits.map(c => 'O' + c.i).sort().join(', ') || 'none'}`;
+    }).join('\n\n');
+    const out = await caps.sample.json(`An earlier check reported each specification requirement below as shown in the ${kind}. Look again, carefully, at the ${kind} passages found for it with a fresh search. Watch for different wording, abbreviations, exclusions and alternates.
 
-Requirement (spec ${it.sec}${sr ? ', ' + sr.label : ''}): ${sr ? sr.text : it.topic}
+For each requirement decide: "match", "conflict", "gap", "exclusion" or "unclear". Quote the ${kind} exactly (5 to 25 words) when it addresses it.
 
-Decide: "match", "conflict", "gap", "exclusion" or "unclear". Quote the ${kind} exactly (5 to 25 words) when it addresses it.
+Reply with only JSON: {"checks":[{"id":"G1","status":"...","other":{"ref":"O7","quote":"exact words"} or null,"note":"one sentence with the values on each side"}]}
 
-Reply with only JSON: {"status":"...","other":{"ref":"O7","quote":"exact words"} or null,"note":"one sentence with the values on each side"}
+${blocks}
 
 ${state.other.kindLabel} passages:
-${hits.map(c => `[O${c.i}] (${c.where || (c.page ? 'p. ' + c.page : 'paragraph ' + (c.i + 1))}) ${c.text}`).join('\n') || '(no related passages found)'}`, { signal, modelTier: 'default' });
+${[...shown.values()].sort((a, b) => a.i - b.i).map(c => `[O${c.i}] (${where(c)}) ${c.text}`).join('\n') || '(no related passages found)'}`, { signal, modelTier: 'default' });
     calls++;
-    const st = String(out && out.status || '').toLowerCase(), n = (it.chk ? it.chk.n : 0) + 1;
-    if (!ST_LABEL[st]) continue;
-    const otherOk = out.other && otherResolver(out.other.ref) && verifyQuote(out.other.quote, otherResolver(out.other.ref).text);
-    if (st === it.status) { it.chk = { status: 'confirmed', n, note: 'Searched again and reached the same answer.' }; confirmed++; }
-    else if (st !== 'gap' && !otherOk) { it.chk = { status: 'disputed', n, note: `A second look said “${ST_LABEL[st]}” but its quote couldn’t be found in the ${kind}. Check by hand.` }; changed++; }
-    else { it.chk = { status: 'corrected', n, was: ST_LABEL[it.status] + (it.note ? ': ' + it.note : ''), note: out.note || '' }; it.status = st; if (out.other) it.other = out.other; if (out.note) it.note = out.note; changed++; }
+    for (const c of (out && Array.isArray(out.checks) ? out.checks : [])) {
+      const it = batch[+String(c.id || '').replace(/\D/g, '') - 1]; if (!it) continue;
+      const st = String(c.status || '').toLowerCase(), n = (it.chk ? it.chk.n : 0) + 1;
+      if (!ST_LABEL[st]) continue;
+      const otherOk = cmpQuoteOk(c.other);
+      if (st === it.status) { if (it.chk && it.chk.status === 'corrected') it.chk = { ...it.chk, n, note: (it.chk.note || '') + ' Searched again after the correction and confirmed.' }; else it.chk = { status: 'confirmed', n, note: 'Searched again and reached the same answer.' }; confirmed++; }
+      else if (st !== 'gap' && !otherOk) { it.chk = { status: 'disputed', n, note: `A second look said “${ST_LABEL[st]}” but its quote couldn’t be found in the ${kind}. Check by hand.` }; changed++; }
+      else if (it.chk && it.chk.status === 'corrected') { it.chk = { ...it.chk, status: 'disputed', n, note: `Corrected once already, and a further look now says “${ST_LABEL[st]}”. Check by hand.` }; changed++; }
+      else { it.chk = { status: 'corrected', n, was: ST_LABEL[it.status] + (it.note ? ': ' + it.note : ''), note: c.note || '' }; it.status = st; it.other = st === 'gap' ? null : c.other || it.other; if (c.note) it.note = c.note; changed++; }
+    }
   }
   return { changed, confirmed, calls, checked: todo.length };
 }
 
 /* pass 4: zoom in on every drawing finding and read the values again */
-async function passDrawings(round, signal, say) {
+async function passDrawings(round, signal, say, reviews) {
   const todo = [];
-  for (const r of state.reviews || []) for (const it of r.items) if (it.status !== 'match' && (!it.chk || (it.chk.status === 'disputed' && it.chk.n < 2))) todo.push({ r, it });
+  for (const r of reviews || state.reviews || []) for (const it of r.items) if (it.status !== 'match' && (!it.chk || (it.chk.status === 'disputed' && it.chk.n < 2))) todo.push({ r, it });
   let changed = 0, confirmed = 0, calls = 0;
   for (let i = 0; i < todo.length; i++) {
     const { r, it } = todo[i];
@@ -4057,6 +4551,11 @@ function renderDeep() {
     pane.innerHTML = `
       <h2 style="margin-top:0">Deep check</h2>
       <p class="note" style="max-width:76ch">Runs back over the whole project several times. Each round re-reads the spec looking for requirements the last reading missed, checks every requirement against its own source text, searches the proposal again for anything called a gap, zooms in on every drawing finding to read the values again, and cross-references the estimate, drawings and proposal. It keeps going until a round finds nothing new and changes nothing, or until the round limit.</p>
+      <div class="step"><h3>Automatic checking</h3>
+        <p class="note" style="max-width:76ch">Every AI answer is checked as soon as it’s made: summaries, Ask, Compare, Drawing review, Ask the drawings, the room schedule and RE: references read from pictures. Each round reads the sources again, confirms or corrects each item, and looks for anything missed. A correction is only taken when it’s backed by text found in the document; anything else is flagged for a person. It stops when a round changes nothing.</p>
+        <div class="row"><label><input type="checkbox" id="acOn" ${AC.on ? 'checked' : ''}> Check every AI answer automatically</label>
+          <label>up to <select id="acRounds">${[1, 2, 3, 4, 5].map(n => `<option ${n === AC.rounds ? 'selected' : ''}>${n}</option>`).join('')}</select> rounds</label></div>
+        <p class="note">This adds requests to Claude: about one to three per round for an answer, more for long comparisons. Stop keeps everything checked so far.</p></div>
       <div class="step"><h3>What to check</h3><div id="dpPasses" class="dp-passes"></div></div>
       <details class="blk" id="dpSecBox"><summary>Spec sections to go over (<span id="dpCount">0</span>)</summary><div id="dpSecs"></div></details>
       <div class="row"><label>Up to <select id="dpRounds">${[2, 3, 4, 5].map(n => `<option ${n === dp.rounds ? 'selected' : ''}>${n}</option>`).join('')}</select> rounds</label>
@@ -4068,6 +4567,8 @@ function renderDeep() {
       <div id="dpRes"></div>`;
     pane.dataset.built = '1';
     $('#dpRounds').onchange = e => { dp.rounds = +e.target.value; drawDeepCost(); };
+    $('#acOn').onchange = e => { AC.on = e.target.checked; saveAC(); };
+    $('#acRounds').onchange = e => { AC.rounds = +e.target.value; saveAC(); };
     $('#dpGo').onclick = runDeep;
     $('#dpStop').onclick = () => dp.ctl && dp.ctl.abort();
     $('#dpPasses').addEventListener('change', e => { const k = e.target.dataset.pass; if (k) { dp.passes[k] = e.target.checked; drawDeepCost(); } });
@@ -4094,7 +4595,7 @@ function drawDeepCost() {
   const pts = secs.reduce((n, s) => n + ((state.summaries.get(s.key) || {}).points || []).length, 0) || parts * 15;
   if (use('spec')) { first += secs.filter(s => !state.summaries.get(s.key)?.points).length; later += parts; }
   if (use('verify')) first += Math.ceil(pts / 20);
-  if (use('cmp')) first += state.cmpItems.filter(it => ['gap', 'unclear'].includes(it.status)).length;
+  if (use('cmp')) first += Math.ceil(state.cmpItems.filter(it => ['gap', 'unclear'].includes(it.status)).length / 8);
   if (use('dwg')) first += (state.reviews || []).reduce((n, r) => n + r.items.filter(it => it.status !== 'match').length, 0);
   const max = first + later * (dp.rounds - 1) + Math.ceil(later * 0.3) * (dp.rounds - 1);
   el.textContent = `About ${first + later} requests to Claude for the first two rounds, up to about ${max} if all ${dp.rounds} rounds run. Later rounds only re-check what changed, so they usually get shorter. Each request takes roughly half a minute to two minutes; you can stop at any time and keep what’s done.`;
@@ -4215,6 +4716,7 @@ function init() {
   $('#sbToggle').onclick = () => { const on = document.body.classList.toggle('show-sb'); $('#sbToggle').setAttribute('aria-expanded', String(on)); };
   $('#btnIndex').onclick = () => saveFile(safeName(state.fileName.replace(/\.pdf$/i, '')) + ' - section index.csv', indexCsv());
   $('#btnZip').onclick = saveZip;
+  $('#btnSplitSize').onclick = e => runSplitBySize('spec', e.currentTarget);
   $('#btnDwgOnly').onclick = () => { document.body.classList.remove('no-doc'); $('.tabs').hidden = false; renderSecList(); setTab('drawings'); };
   $('#pvClose').onclick = closePreview;
   document.addEventListener('click', e => { const g = e.target.closest('[data-tab-go]'); if (g) setTab(g.dataset.tabGo); });
