@@ -1,0 +1,930 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CIM Job Cost Pilot</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="vendor/msal-browser.min.js"></script>
+<script src="config.js"></script>
+<script src="m365.js"></script>
+<style>
+:root{
+  --bg:#F3F4F6; --surface:#FFFFFF; --surface2:#F8F8FA; --ink:#1A1F2E; --body:#3F4656; --muted:#636B7A; --line:#DFE2E8;
+  --navy:#1B2550; --navy-ink:#FFFFFF; --navy-soft:#E6E9F3; --amber:#FFF3D9; --amber-line:#E6C27A; --amber-ink:#7A4510;
+  --green:#E4F2E9; --green-ink:#25663F; --red-ink:#9B2C2C; --focus:#3B5BDB;
+  color-scheme: light;
+  box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#12151C; --surface:#1B1F29; --surface2:#222734; --ink:#ECEEF3; --body:#C7CBD4; --muted:#9AA1AE; --line:#323846;
+  --navy:#8FA2E8; --navy-ink:#10131A; --navy-soft:#262D44; --amber:#3A2E17; --amber-line:#7A5E22; --amber-ink:#F2CC85;
+  --green:#1C3326; --green-ink:#8FD3A8; --red-ink:#F0A3A3; --focus:#8FA2E8; color-scheme: dark; } }
+:root[data-theme="dark"]{
+  --bg:#12151C; --surface:#1B1F29; --surface2:#222734; --ink:#ECEEF3; --body:#C7CBD4; --muted:#9AA1AE; --line:#323846;
+  --navy:#8FA2E8; --navy-ink:#10131A; --navy-soft:#262D44; --amber:#3A2E17; --amber-line:#7A5E22; --amber-ink:#F2CC85;
+  --green:#1C3326; --green-ink:#8FD3A8; --red-ink:#F0A3A3; --focus:#8FA2E8; color-scheme: dark; }
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 'IBM Plex Sans',Arial,sans-serif;font-variant-numeric:tabular-nums}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--surface)}
+a{color:var(--navy)}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--surface);border-bottom:1px solid var(--line)}
+.top-in{max-width:1280px;margin:0 auto;padding:12px 20px 0;display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px 28px}
+.brand{display:flex;flex-direction:column;padding-bottom:12px}
+.brand b{font:500 20px/1.2 'IBM Plex Serif',Georgia,serif;color:var(--navy)}
+.brand span{font-size:13px;color:var(--muted)}
+nav{display:flex;flex-wrap:wrap;gap:2px}
+nav a{display:inline-block;padding:10px 14px 12px;text-decoration:none;color:var(--muted);border-bottom:3px solid transparent;font-weight:500}
+nav a[aria-current="page"]{color:var(--ink);border-bottom-color:var(--navy)}
+main{max-width:1280px;margin:0 auto;padding:24px 20px 64px}
+h1{font:500 28px/1.2 'IBM Plex Serif',Georgia,serif;margin:0 0 6px;color:var(--ink)}
+h2{font-size:17px;margin:0 0 10px}
+.lede{margin:0 0 20px;color:var(--body);max-width:72ch}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin-bottom:16px}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.spacer{flex:1}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:9px 14px;min-height:42px;cursor:pointer;font-weight:500;color:var(--navy)}
+.btn.primary{background:var(--navy);border-color:var(--navy);color:var(--navy-ink)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.small{min-height:34px;padding:5px 10px;font-size:14px}
+.note{font-size:13px;color:var(--muted)}
+.stat{display:flex;flex-direction:column;padding:0 22px 0 0;margin-right:22px;border-right:1px solid var(--line)}
+.stat:last-child{border-right:0}
+.stat b{font-size:22px;font-weight:600}
+.stat span{font-size:13px;color:var(--muted)}
+.drop{border:2px dashed var(--line);border-radius:10px;padding:36px 20px;text-align:center;background:var(--surface2);cursor:pointer}
+.drop.over{border-color:var(--navy);background:var(--navy-soft)}
+.issue{background:var(--amber);border:1px solid var(--amber-line);border-radius:10px;padding:14px 16px;margin-bottom:10px}
+.issue p{margin:0 0 8px}
+.issue b{color:var(--amber-ink)}
+.okmsg{background:var(--green);color:var(--green-ink);border-radius:8px;padding:10px 14px;font-weight:500;margin-bottom:12px}
+.errmsg{background:var(--amber);color:var(--amber-ink);border-radius:8px;padding:10px 14px;font-weight:500;margin-bottom:12px}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%}
+th{text-align:left;font-size:12.5px;font-weight:600;color:var(--muted);padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap;background:var(--surface2)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+td.num,th.num{text-align:right;white-space:nowrap}
+tr.flag td{background:var(--amber)}
+.chip{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12.5px;font-weight:500;background:var(--navy-soft);color:var(--navy)}
+.chip.ok{background:var(--green);color:var(--green-ink)}
+.chip.warn{background:var(--amber);color:var(--amber-ink)}
+input.cell{width:100%;min-width:84px;border:1px solid var(--line);border-radius:6px;padding:5px 8px;background:var(--surface);text-align:right}
+input.cell.text{text-align:left;min-width:120px}
+input.inp,select.inp{border:1px solid var(--line);border-radius:6px;padding:7px 10px;background:var(--surface);min-height:40px}
+details summary{cursor:pointer}
+.legs{font-size:13.5px;color:var(--body);margin:6px 0 0}
+.legs td{padding:4px 8px;border-bottom:1px dashed var(--line)}
+.wip th:first-child,.wip td:first-child{position:sticky;left:0;background:var(--surface);z-index:1}
+.wip th:first-child{background:var(--surface2)}
+.grp th{font-size:12px;color:var(--ink);background:var(--surface);text-align:center;border-bottom:2px solid var(--navy)}
+.calc{color:var(--ink)}
+.linkbtn{background:none;border:0;padding:0;color:var(--navy);text-decoration:underline;cursor:pointer;font-weight:500}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+body.phone nav{display:none} body.phone main{max-width:520px;padding:16px 14px 48px} body.phone .brand span{display:none}
+.leg{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px dashed var(--line);font-size:14.5px}
+.big{font-size:17px;min-height:52px;width:100%}
+.roles{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin:0 0 18px}
+.role{text-align:left;display:flex;flex-direction:column;gap:4px;padding:16px;min-height:96px;border:1px solid var(--line, #ccc);border-radius:10px;background:var(--panel, transparent);color:inherit;font:inherit;cursor:pointer}
+.role:hover,.role:focus-visible{border-color:currentColor}
+.role b{font-size:17px}.role span{opacity:.75;font-size:14px}
+.steps{list-style:none;padding:0;margin:0}.steps li{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-top:1px solid var(--line, #ddd)}.steps li:first-child{border-top:0}
+.tick{flex:0 0 22px;height:22px;border-radius:50%;border:2px solid currentColor;display:inline-flex;align-items:center;justify-content:center;font-size:13px;opacity:.5}.tick.on{opacity:1;background:#2e7d4f;border-color:#2e7d4f;color:#fff}
+.stack{display:flex;flex-direction:column;gap:10px}
+.stack label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted);font-weight:500}
+.stack select,.stack input{font-size:16px;min-height:48px;width:100%}
+.acct{margin-left:auto;padding-bottom:12px;display:flex;gap:10px;align-items:center;font-size:13px;color:var(--muted)}
+@media (max-width:640px){ .stat{border-right:0;margin-right:0;width:50%} h1{font-size:23px} }
+</style>
+</head>
+<body>
+<header class="top"><div class="top-in">
+  <div class="brand"><b>CIM Job Cost Pilot</b><span>Mileage from timecards, posted to each job&#8217;s WIP</span></div>
+  <nav aria-label="Sections" id="nav">
+    <a href="#start">Start here</a><a href="#trip">Log a trip</a><a href="#mileage">Mileage</a><a href="#wip">WIP schedule</a><a href="#imports">Imports</a><a href="#setup">Setup</a>
+  </nav>
+  <div class="acct" id="acct"></div>
+</div></header>
+<main id="app" aria-live="polite"><p class="note">Loading&#8230;</p></main>
+<input type="file" id="impfile" accept=".xlsx,.xls,.csv" class="sr" aria-label="Choose a file to import">
+<input type="file" id="file" accept=".xlsx,.xls" class="sr" aria-label="Choose a timecard export">
+<script>
+const S = { db:null, canWrite:true, loaded:false, loadErr:'', jobs:{}, legs:{}, settings:{rate:0.58,bases:{},lateCut:0.9,lateAmt:1000,jumpPts:15}, mileage:{}, parking:{}, wip:{},
+  week:null, approved:{}, msg:'', err:'', sel:null, jobFilter:'', pk:{who:'',job:'',amt:'',date:''}, trips:{}, wkPick:null, imports:{}, lines:{}, closes:{}, reviews:{}, imp:null, impType:'sage_cost', wipFilter:'all', me:'', user:null,
+  t:{who:'', date:'', stops:['',''], manual:{}, park:'', photo:null, photoName:'', sent:null, busy:false} };
+try { S.t.who = localStorage.getItem('cimInstaller') || ''; } catch(e) {}
+const $ = s => document.querySelector(s);
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const money = n => (n < 0 ? '(' : '') + '$' + Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) + (n < 0 ? ')' : '');
+const money0 = n => (n < 0 ? '(' : '') + '$' + Math.round(Math.abs(n)).toLocaleString('en-US') + (n < 0 ? ')' : '');
+const num = v => { const x = parseFloat(String(v ?? '').replace(/[$,\s]/g,'')); return isNaN(x) ? null : x; };
+const key = (a,b) => [a,b].sort().join('__');
+const ymd = d => d.getFullYear() + String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0');
+const mdy = d => (d.getMonth()+1) + '/' + d.getDate() + '/' + d.getFullYear();
+const dayName = d => ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()] + ' ' + (d.getMonth()+1) + '/' + d.getDate();
+const initials = n => String(n).split(/\s+/).map(p => p[0] || '').join('').toUpperCase().slice(0,3);
+
+/* ---------- data store ---------- */
+async function initDb(){
+  const timer = setTimeout(() => { if (!S.loaded) { S.loadErr = 'Shared data did not load within 10 seconds. You can still load a timecard file, but saved jobs, distances and WIP entries are not available in this view.'; S.loaded = true; render(); } }, 10000);
+  let conn;
+  try { conn = await JCM365.connect(); } catch(e) { conn = {state:'error', message: (e && e.message) || 'Sign-in failed.'}; }
+  S.conn = conn; renderAcct();
+  if (conn.state !== 'ready') { clearTimeout(timer); S.loaded = true; S.canWrite = false; S.gate = conn; render(); return; }
+  const db = conn.db; S.db = db;
+  try { const u = conn.user; if (u) { S.user = u; const c = await u.can('data.write'); if (c === false) S.canWrite = false; S.me = (await u.id()) || ''; } } catch(e) {}
+  let pending = 11;
+  const done = () => { if (--pending <= 0 && !S.loaded) { clearTimeout(timer); S.loaded = true; } render(); };
+  const sub = (name, setter) => db.collection(name).onSnapshot(snap => { const o = {}; snap.docs.forEach(d => o[d.id] = d.data()); setter(o); done(); }, e => { S.loadErr = 'Could not read ' + name + ': ' + e.message; done(); });
+  sub('jobs', o => S.jobs = o); sub('legs', o => S.legs = o); sub('mileage', o => S.mileage = o); sub('parking', o => S.parking = o); sub('wip', o => S.wip = o); sub('trips', o => S.trips = o); sub('imports', o => { S.imports = o; _costCache = null; }); sub('lines', o => S.lines = o); sub('closes', o => S.closes = o); sub('reviews', o => S.reviews = o);
+  db.doc('config/settings').onSnapshot(d => { if (d.exists) S.settings = Object.assign({rate:0.58,bases:{},lateCut:0.9,lateAmt:1000,jumpPts:15}, d.data()); done(); }, e => done());
+  conn.start();
+}
+function renderAcct(){
+  const el = $('#acct'), c = S.conn; if (!el || !c || !c.account) return;
+  el.innerHTML = '<span>' + esc(c.account.name) + '</span><button class="linkbtn" id="signout">Sign out</button>'; $('#signout').onclick = c.signOut;
+}
+function viewGate(){
+  const g = S.gate;
+  if (g.state === 'not_configured') return '<h1>Not connected yet</h1><p class="lede">The Job Cost Pilot stores its jobs, trips and WIP in CIM&#8217;s SharePoint, and it hasn&#8217;t been connected yet. IT: see setup/SETUP.md in the job-cost folder.</p>';
+  if (g.state === 'signed_out') return '<h1>Sign in</h1><p class="lede">Use your Concepts in Millwork Microsoft 365 account.</p><button class="btn primary big" style="max-width:320px" data-act="signin">Sign in</button>';
+  return '<h1>The pilot couldn&#8217;t load</h1><p class="lede">' + esc(g.message || 'Reload the page.') + '</p>';
+}
+function setupPanel(){
+  const st = S.setupImport;
+  return '<div class="panel stack" style="border-color:var(--navy)"><h2 style="margin:0">One-time setup: load the jobs</h2><p class="note" style="margin:0">The Job Cost list in SharePoint is empty. Load the starting setup file (job-cost-setup.json) to add the 83 jobs with their Sage and Innergy numbers and distances, the job-to-job distances, the mileage rate and the installers&#8217; home bases.</p>' +
+    (st ? '<p style="margin:0"><b>' + (st.done < st.total ? 'Loading ' + st.done + ' of ' + st.total + '&#8230;' : 'Loaded ' + st.total + ' items.') + '</b>' + (st.failed ? ' ' + st.failed + ' couldn&#8217;t be saved; load the file again to retry them.' : '') + '</p>'
+        : '<div class="row"><button class="btn primary" data-act="setupfile">Choose job-cost-setup.json</button><span class="note">The file you were given with this version. It isn&#8217;t stored on the website.</span></div>') + '</div>';
+}
+async function loadSetup(file){
+  let parsed; try { parsed = JSON.parse(await file.text()); } catch(e) { S.err = 'That isn&#8217;t the Job Cost setup file.'; return render(); }
+  if (!parsed || parsed.format !== 'job-cost-setup-1' || !parsed.collections) { S.err = 'That isn&#8217;t the Job Cost setup file.'; return render(); }
+  const items = []; Object.entries(parsed.collections).forEach(([c, docs]) => Object.entries(docs).forEach(([id, d]) => items.push([c + '/' + docId(id), d])));
+  S.setupImport = {total: items.length, done: 0, failed: 0}; render();
+  let i = 0; const run = async () => { while (i < items.length) { const [path, d] = items[i++]; try { await S.db.doc(path).set(d); } catch(e) { S.setupImport.failed++; } S.setupImport.done++; render(); } };
+  await Promise.all([run(), run(), run()]);
+  S.msg = S.setupImport.failed ? 'Some items didn&#8217;t save.' : 'Jobs, distances and settings loaded.'; S.setupImport = null; render();
+}
+async function save(path, data, merge=true){
+  if (!S.db || !S.canWrite) { S.err = 'This view cannot save changes.'; render(); return false; }
+  try { const ref = S.db.doc(path); if (merge) { const g = await ref.get(); if (g.exists) await ref.update(data); else await ref.set(data); } else await ref.set(data); return true; }
+  catch(e) { if (e.code === 'invalid_argument') S.canWrite = false; S.err = 'Could not save: ' + e.message; render(); return false; }
+}
+async function del(path){ if (!S.db || !S.canWrite) return; try { await S.db.doc(path).delete(); } catch(e) { S.err = 'Could not delete: ' + e.message; render(); } }
+const docId = s => String(s).replace(/[^A-Za-z0-9_\-.~:@+]/g,'_');
+
+/* ---------- job lookups ---------- */
+function findJob(n){
+  n = String(n||'').trim(); if (!n) return null;
+  if (S.jobs[n]) return S.jobs[n];
+  for (const id in S.jobs){ const j = S.jobs[id]; if (j.short === n || String(j.alias||'').split(/[,\s]+/).includes(n) || j.proj === n || (j.aka||[]).includes(n.toLowerCase())) return j; }
+  return null;
+}
+const jobName = n => { const j = findJob(n); return j ? (j.iname || j.tname || '') : ''; };
+function baseMiles(job, base){ const j = findJob(job); if (!j) return null; const v = base === 'Englewood' ? j.eng : j.cos; return (v === '' || v == null) ? null : Number(v); }
+function legMiles(a,b){ if (a === b) return 0; const l = S.legs[key(a,b)]; return l && l.miles !== '' && l.miles != null ? Number(l.miles) : null; }
+
+/* ---------- timecard parsing ---------- */
+function parseStart(v){
+  if (v instanceof Date) return v;
+  if (typeof v === 'number') { const d = XLSX.SSF.parse_date_code(v); return new Date(d.y, d.m-1, d.d, d.H, d.M); }
+  const m = String(v||'').match(/(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+  if (!m) return null; let h = +m[4]; if (m[6]) { if (/pm/i.test(m[6]) && h < 12) h += 12; if (/am/i.test(m[6]) && h === 12) h = 0; }
+  return new Date(+m[3], +m[1]-1, +m[2], h, +m[5]);
+}
+function loadWorkbook(buf, fname){
+  let rows;
+  try { const wb = XLSX.read(buf, {type:'array', cellDates:true}); rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {defval:null, raw:true}); }
+  catch(e) { S.err = 'That file could not be read as a spreadsheet. Export Time Tracking from Innergy as .xlsx and try again.'; render(); return; }
+  const need = ['Name','Activity Name','Project External Id','WO Number','Start'];
+  const cols = rows.length ? Object.keys(rows[0]) : [];
+  const missing = need.filter(c => !cols.includes(c));
+  if (missing.length) { S.err = 'This file is missing the column' + (missing.length > 1 ? 's ' : ' ') + missing.join(', ') + '. Use Innergy&#8217;s Time Tracking export, the same report as "Time Tracking 10_19_2026".'; render(); return; }
+  let who = null; const entries = [];
+  for (const r of rows) {
+    if (r['Name']) who = String(r['Name']).trim();
+    if (!r['Activity Name'] || !who) continue;
+    const st = parseStart(r['Start']); if (!st) continue;
+    const ext = r['Project External Id']; if (ext == null || ext === '') continue;
+    const sage = String(ext).replace(/\.0+$/,'').trim();
+    const wo = String(r['WO Number']||''); const proj = (wo.match(/^(P-\d\d-\d{4})/)||[])[1] || '';
+    entries.push({who, sage, proj, wo, pname:String(r['Project Name']||''), act:String(r['Activity Name']||''), start:st});
+  }
+  if (!entries.length) { S.err = 'No job time was found in this file. Check that it covers a pay week with installer time on jobs.'; render(); return; }
+  const days = {};
+  entries.sort((a,b) => a.start - b.start).forEach(e => { const k = e.who + '|' + ymd(e.start); (days[k] = days[k] || {who:e.who, date:new Date(e.start.getFullYear(), e.start.getMonth(), e.start.getDate()), seq:[]}).seq.push(e); });
+  const tcJobs = {};
+  entries.forEach(e => { const t = tcJobs[e.sage] = tcJobs[e.sage] || {sage:e.sage, proj:e.proj, pname:e.pname, wos:{}, travelWo:''}; t.wos[e.wo] = 1; if (/travel/i.test(e.act) && !t.travelWo) t.travelWo = e.wo; if (!t.proj) t.proj = e.proj; });
+  const list = Object.values(days).map(d => { const stops = []; d.seq.forEach(e => { if (stops[stops.length-1] !== e.sage) stops.push(e.sage); }); return {who:d.who, date:d.date, stops}; })
+    .sort((a,b) => a.who.localeCompare(b.who) || a.date - b.date);
+  const start = list.reduce((m,d) => d.date < m ? d.date : m, list[0].date);
+  S.week = {fname, days:list, tcJobs, start}; S.approved = {}; S.msg = 'Loaded ' + fname + ': ' + list.length + ' installer-days from ' + new Set(list.map(d=>d.who)).size + ' installers.'; S.err = '';
+  render();
+}
+
+/* ---------- mileage math ---------- */
+function computeWeek(){
+  if (!S.week) return null;
+  const rate = Number(S.settings.rate) || 0;
+  const issues = []; const seenIssue = {};
+  const addIssue = (k, o) => { if (!seenIssue[k]) { seenIssue[k] = 1; issues.push(o); } };
+  const days = S.week.days.map(d => {
+    const base = (S.settings.bases||{})[d.who] || '';
+    const stops = ['Base', ...d.stops, 'Base']; const legs = []; let problem = false;
+    if (!base) { problem = true; addIssue('base|'+d.who, {type:'base', who:d.who}); }
+    d.stops.forEach(s => { if (!findJob(s)) { problem = true; addIssue('job|'+s, {type:'job', sage:s, tc:S.week.tcJobs[s]}); } });
+    for (let i = 0; i < stops.length - 1; i++) {
+      const a = stops[i], b = stops[i+1]; const charge = b !== 'Base' ? b : a;
+      let mi = null;
+      if (base) {
+        if (a === 'Base') { mi = baseMiles(b, base); if (mi == null && findJob(b)) addIssue('bm|'+b+'|'+base, {type:'basemiles', sage:b, base}); }
+        else if (b === 'Base') { mi = baseMiles(a, base); if (mi == null && findJob(a)) addIssue('bm|'+a+'|'+base, {type:'basemiles', sage:a, base}); }
+        else { mi = legMiles(a, b); if (mi == null) addIssue('leg|'+key(a,b), {type:'leg', a, b}); }
+      }
+      if (mi == null) problem = true;
+      legs.push({a, b, charge, mi, amt: mi == null ? 0 : mi * rate, ext: 'MIL-' + initials(d.who) + '-' + ymd(d.date) + '-' + (i+1) + '-' + charge});
+    }
+    const mi = legs.reduce((s,l) => s + (l.mi||0), 0);
+    const id = d.who + '|' + ymd(d.date); const ph = tripFor(d.who, ymd(d.date));
+    return {id, who:d.who, date:d.date, base, stops:d.stops, legs, mi, amt: mi * rate, ready: !problem, fromPhone: !!ph, phoneMatch: ph ? ph.stops.join('>') === d.stops.join('>') : null};
+  });
+  return {days, issues, rate};
+}
+
+/* ---------- outputs ---------- */
+function monday(d){ const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; }
+function weekStart(){ return S.week ? S.week.start : (S.wkPick || monday(new Date())); }
+function inWeek(ymdStr){ const ws = weekStart(); const we = new Date(ws); we.setDate(we.getDate() + 6); return ymdStr >= ymd(ws) && ymdStr <= ymd(we); }
+const ymdToDate = s => new Date(+s.slice(0,4), +s.slice(4,6)-1, +s.slice(6,8));
+function tripFor(who, ymdStr){ const t = S.trips[docId('TRIP-' + initials(who) + '-' + ymdStr)]; return t && t.status !== 'rejected' ? t : null; }
+function phoneDays(status){ return Object.entries(S.trips).filter(([id,t]) => inWeek(t.date) && (!status || t.status === status)).map(([id,t]) => ({id, trip:id, who:t.who, date:ymdToDate(t.date), stops:t.stops, legs:(t.legs||[]).map(l => ({...l, amt:(l.mi||0) * (Number(t.rate)||0)})), mi:t.miles, amt:t.amount, ready:true, phone:true, status:t.status})); }
+function approvedDays(W){ const tc = W ? W.days.filter(d => d.ready && !d.fromPhone && S.approved[d.id]) : []; return tc.concat(phoneDays('approved')); }
+function weekParking(){ const ws = ymd(weekStart()); return Object.entries(S.parking).filter(([id,p]) => p.week === ws && (!p.trip || (S.trips[p.trip] && S.trips[p.trip].status === 'approved'))).map(([id,p]) => ({id, ...p})); }
+async function download(filename, data){
+  const dl = S.conn && S.conn.downloads;
+  if (!dl) { S.err = 'Downloads are not available in this view.'; render(); return; }
+  try { await dl.save({filename, data}); S.msg = 'Saved ' + filename + '.'; S.err=''; } catch(e) { if (e.code !== 'declined') S.err = 'Could not save ' + filename + ': ' + e.message; }
+  render();
+}
+const csv = rows => rows.map(r => r.map(v => { const s = String(v ?? ''); return /[",\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s; }).join(',')).join('\r\n');
+function bankFile(W){
+  const by = {}; approvedDays(W).forEach(d => { const b = by[d.who] = by[d.who] || {mi:0, amt:0, pk:0}; b.mi += d.mi; b.amt += d.amt; });
+  weekParking().forEach(p => { if (by[p.who]) by[p.who].pk += Number(p.amt)||0; });
+  const rows = [['Installer','Week of','Miles','Mileage','Parking','Total']];
+  Object.entries(by).forEach(([w,b]) => rows.push([w, mdy(weekStart()), b.mi, b.amt.toFixed(2), b.pk.toFixed(2), (b.amt+b.pk).toFixed(2)]));
+  return csv(rows);
+}
+function jobTotals(W){
+  const by = {};
+  approvedDays(W).forEach(d => d.legs.forEach(l => { const k = d.who + '|' + l.charge; const t = by[k] = by[k] || {who:d.who, sage:l.charge, mi:0, amt:0, pk:0}; t.mi += l.mi; t.amt += l.amt; }));
+  weekParking().forEach(p => { const k = p.who + '|' + p.sage; const t = by[k] = by[k] || {who:p.who, sage:p.sage, mi:0, amt:0, pk:0}; t.pk += Number(p.amt)||0; });
+  return Object.values(by);
+}
+function sageFile(W){
+  const rows = [['Week of','Installer','Sage job #','Cost code','Amount','Description']];
+  jobTotals(W).forEach(t => { if (t.amt) rows.push([mdy(weekStart()), t.who, t.sage, '2-03-01', t.amt.toFixed(2), 'Mileage ' + t.mi + ' mi']); if (t.pk) rows.push([mdy(weekStart()), t.who, t.sage, '2-03-99', t.pk.toFixed(2), 'Parking']); });
+  return csv(rows);
+}
+function innergyFile(W){
+  const head = ['WorkOrder','BudgetGroup','LaborItem','Hours','Cost','PostDate','Status','ExternalId','Notes','GL Account','Terms','Pay To','VendorInvoiceNumber','InvoiceDate','PaymentDueDate'];
+  const rows = [head];
+  jobTotals(W).forEach(t => { const j = findJob(t.sage); const tc = (S.week && S.week.tcJobs[t.sage]) || {};
+    const wo = tc.travelWo || Object.keys(tc.wos||{})[0] || (j ? j.proj : '');
+    rows.push([wo, 'Installation', '', '', +(t.amt + t.pk).toFixed(2), mdy(weekStart()), 'Open', 'MIL-' + initials(t.who) + '-WK' + ymd(weekStart()) + '-' + t.sage, 'Mileage ' + t.mi + ' mi + parking, ' + t.who, '', '', '(payroll)', '', mdy(weekStart()), '']); });
+  const ws = XLSX.utils.aoa_to_sheet(rows); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Input');
+  return new Blob([XLSX.write(wb, {bookType:'xlsx', type:'array'})], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+}
+async function postToWip(W){
+  const ds = approvedDays(W).filter(d => !d.phone); if (!ds.length) { S.err = 'Approve at least one timecard day first. Days sent from phones are already on the WIP schedule.'; render(); return; }
+  let added = 0, skipped = 0;
+  for (const d of ds) for (const l of d.legs) {
+    const id = docId(l.ext); if (S.mileage[id]) { skipped++; continue; }
+    const ok = await save('mileage/' + id, {who:d.who, date:ymd(d.date), week:ymd(S.week.start), from:l.a, to:l.b, sage:l.charge, miles:l.mi, amount:+l.amt.toFixed(2), rate:W.rate}, false);
+    if (ok) added++;
+  }
+  S.msg = added + ' mileage legs posted to the WIP schedule' + (skipped ? '; ' + skipped + ' were already posted and skipped' : '') + '.'; S.err=''; render();
+}
+
+/* ---------- WIP: imported costs, budget lines, closes ---------- */
+const CCMAP_DEFAULT = {'1-01-01':'Material','1-01-03':'Freight','1-01-05':'Job supplies','1-03-02':'Installation','1-03-03':'Installation','1-03-08':'Installation','1-03-99':'Installation','1-04-03':'Delivery','1-04-04':'Delivery','1-04-99':'Delivery','1-05-07':'Buyout','1-06-01':'Engineering','1-06-04':'Job fees','4-05-01':'Finishing','2-03-01':'Installation','2-03-99':'Installation'};
+const ccmap = () => Object.assign({}, CCMAP_DEFAULT, S.settings.ccmap||{});
+const MILE_LINE = 'Installation';
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+function curMonth(){ if (S.settings.openMonth) return S.settings.openMonth; const d = new Date(); d.setDate(1); if (new Date().getDate() <= 20) d.setMonth(d.getMonth()-1); return d.getFullYear() + String(d.getMonth()+1).padStart(2,'0'); }
+const monthName = m => MONTHS[+m.slice(4)-1] + ' ' + m.slice(0,4);
+const shortMonth = m => MONTHS[+m.slice(4)-1];
+function nextMonth(m){ let y = +m.slice(0,4), mo = +m.slice(4) + 1; if (mo > 12) { mo = 1; y++; } return y + String(mo).padStart(2,'0'); }
+function priorClose(){ const m = curMonth(); const ks = Object.keys(S.closes).filter(k => k < m).sort(); return ks.length ? S.closes[ks[ks.length-1]] : null; }
+let _costCache = null;
+function allCosts(){
+  if (_costCache) return _costCache;
+  const seen = new Set(), out = [];
+  Object.entries(S.imports).sort((a,b) => String(a[1].at).localeCompare(String(b[1].at))).forEach(([id, im]) => { if (im.removed) return;
+    (im.rows||[]).forEach(r => { if (seen.has(r.k)) return; seen.add(r.k); out.push({...r, imp:id, source:im.source}); }); });
+  return (_costCache = out);
+}
+function mileageFor(sage){ let m = 0, mi = 0; Object.values(S.mileage).forEach(x => { if (x.sage === sage) { m += Number(x.amount)||0; mi += Number(x.miles)||0; } }); let p = 0; Object.values(S.parking).forEach(x => { if (x.sage === sage && x.posted) p += Number(x.amt)||0; }); return {m, mi, p}; }
+function jobAgg(sage){
+  const a = {contract:null, billed:null, inn:0, sg:0, hasInn:false, hasSg:false, lines:{}, rows:[]};
+  const L = n => a.lines[n] = a.lines[n] || {budget:0, ctd:0, openpo:0, hasBudget:false};
+  allCosts().forEach(r => { if (r.sage !== sage) return; a.rows.push(r); const amt = Number(r.amt)||0;
+    if (r.kind === 'contract') a.contract = (a.contract||0) + amt;
+    else if (r.kind === 'billed') a.billed = (a.billed||0) + amt;
+    else if (r.kind === 'budget') { const l = L(r.line||'Unassigned'); l.budget += amt; l.hasBudget = true; }
+    else if (r.kind === 'openpo') L(r.line||'Unassigned').openpo += amt;
+    else { L(r.line||'Unassigned').ctd += amt; if (r.source === 'Sage') { a.sg += amt; a.hasSg = true; } else { a.inn += amt; a.hasInn = true; } }
+  });
+  const ml = mileageFor(sage); if (ml.m + ml.p) L(MILE_LINE).ctd += ml.m + ml.p;
+  Object.values(S.lines).forEach(l => { if (l.sage === sage && l.line) { const x = L(l.line); const b = num(l.budget); if (b != null && !x.hasBudget) { x.budget = b; x.hasBudget = true; } } });
+  a.ml = ml; return a;
+}
+const lineDoc = (sage, line) => S.lines[docId(sage + '__' + line)] || {};
+function lineCtc(sage, line, x){
+  const d = lineDoc(sage, line); const left = x.budget - x.ctd;
+  const sug = d.crossed ? x.openpo : Math.max(x.openpo, left, 0);
+  const v = num(d.ctc); return {left, sug, ctc: v != null ? v : sug, override: v != null, crossed: !!d.crossed, note: d.note || ''};
+}
+function wipIds(){
+  const ids = new Set([...Object.keys(S.wip), ...Object.values(S.mileage).map(m=>m.sage), ...Object.values(S.parking).filter(p=>p.posted).map(p=>p.sage),
+    ...allCosts().map(r => r.sage), ...Object.values(S.lines).map(l => l.sage)]);
+  const pc = priorClose(); if (pc && pc.jobs) Object.keys(pc.jobs).forEach(k => ids.add(k));
+  return [...ids].filter(x => x && !String(x).startsWith('?')).sort();
+}
+function wipRow(sage){
+  const w = S.wip[sage] || {}; const j = findJob(sage) || {}; const g = k => num(w[k]);
+  const a = jobAgg(sage); const ml = a.ml;
+  const base = a.contract != null ? a.contract : g('contract');
+  const contract = (base == null && g('co') == null) ? null : (base||0) + (g('co')||0);
+  const billed = a.billed != null ? a.billed : g('billed');
+  const inn = a.hasInn ? a.inn : (g('innergy')||0), sg = a.hasSg ? a.sg : (g('sage')||0);
+  const hasInn = a.hasInn || g('innergy') != null;
+  const ctd = inn + sg + ml.m + ml.p;
+  const lines = Object.keys(a.lines).sort().map(n => ({line:n, ...a.lines[n], ...lineCtc(sage, n, a.lines[n])}));
+  const useLines = lines.some(l => l.hasBudget || l.openpo);
+  const ctc = useLines ? lines.reduce((s,l) => s + l.ctc, 0) + (g('sub')||0)
+                       : (g('openpo')||0) + (g('sub')||0) + (g('budget')||0) + (g('hrs')||0) * (g('rate')||0);
+  const est = ctd + ctc;
+  const pct = (contract != null && hasInn && est > 0) ? ctd / est : null;
+  const earned = pct != null ? contract * pct : null;
+  const over = (earned != null && billed != null) ? billed - earned : null;
+  const gp = contract != null ? contract - est : null; const margin = (gp != null && contract) ? gp / contract : null;
+  const pc = priorClose(); const prev = pc && pc.jobs ? pc.jobs[sage] : null;
+  const last = prev ? prev.est : g('last'); const chg = last != null ? est - last : null;
+  const lastPct = prev ? prev.pct : null; const move = (lastPct != null && pct != null) ? pct - lastPct : null;
+  const flags = [];
+  if (contract == null || !hasInn) flags.push('Needs contract and Innergy costs');
+  if (pct != null && pct >= Number(S.settings.lateCut) && chg != null && Math.abs(chg) > Number(S.settings.lateAmt)) flags.push('Late cost change: confirm with PM');
+  if (move != null && Math.abs(move) * 100 > Number(S.settings.jumpPts || 15)) flags.push('% complete moved ' + (move*100).toFixed(0) + ' pts');
+  if (lines.some(l => l.hasBudget && l.ctd > l.budget)) flags.push('A line is over budget');
+  if (lines.some(l => /^Unmapped/.test(l.line))) flags.push('Unmapped cost code');
+  if (over != null && over < 0) flags.push('Underbilled');
+  if (margin != null && margin < 0) flags.push('Projected loss');
+  const rv = S.reviews[docId(curMonth() + '__' + sage)] || null;
+  const stale = rv && Math.abs((Number(rv.est)||0) - est) > 0.5;
+  return {sage, proj:j.proj||'', name:j.iname||j.tname||'', w, a, ml, contract, billed, inn, sg, ctd, lines, useLines, ctc, est, pct, earned, over, gp, margin, last, chg, lastPct, move, flags, flag: flags[0] || 'OK', rv, stale};
+}
+function resolveJob(raw){
+  const s = String(raw ?? '').trim().replace(/\.0+$/,''); if (!s) return null;
+  let j = findJob(s); if (j) return j.sage;
+  const p = s.match(/P-\d\d-\d{4}/); if (p) { j = findJob(p[0]); if (j) return j.sage; }
+  const n = s.match(/^(\d{4,6})\b/); if (n) { j = findJob(n[1]); if (j) return j.sage; }
+  const low = s.toLowerCase().replace(/\s+/g,' ');
+  for (const id in S.jobs) { const x = S.jobs[id]; const names = [x.iname, x.tname, ...(x.aka||[])].filter(Boolean).map(v => String(v).toLowerCase().replace(/\s+/g,' ').trim());
+    if (names.some(v => v === low || (v.length > 5 && low.length > 5 && (low.includes(v) || v.includes(low))))) return x.sage; }
+  return null;
+}
+let _names = {};
+function nameOf(id){
+  if (!id) return '';
+  if (_names[id] !== undefined) return _names[id] || 'Someone';
+  _names[id] = '';
+  if (S.user) S.user.profiles([id]).then(ps => { _names[id] = (ps && ps[id] && ps[id].name) || 'Someone'; render(); }).catch(() => {});
+  return 'Someone';
+}
+
+/* ---------- imports ---------- */
+const IMPORT_TYPES = {
+  sage_cost:{label:'Sage job costs (non-PO lines)', st:'sage', kind:'cost', source:'Sage', lineLabel:'Cost code'},
+  inn_cost:{label:'Innergy job costs (PO invoices and labor)', st:'innergy', kind:'cost', source:'Innergy', lineLabel:'Budget group'},
+  inn_budget:{label:'Innergy budgets by budget group', st:'innergy', kind:'budget', source:'Innergy', lineLabel:'Budget group'},
+  inn_po:{label:'Innergy open POs not yet invoiced', st:'innergy', kind:'openpo', source:'Innergy', lineLabel:'Budget group'},
+  contract:{label:'Contract values, with approved change orders', st:'other', kind:'contract', source:'Contract', lineLabel:'Line'},
+  billed:{label:'Billed to date (Sage AR)', st:'other', kind:'billed', source:'Sage AR', lineLabel:'Line'}
+};
+const ALIASES = {
+  job:['sage job #','job #','job','job number','project external id','innergy project','project','work order','workorder','wo number'],
+  amount:['amount','cost','total','value','extended amount','extended','balance','contract','billed'],
+  line:['cost code','costcode','budget group','budgetgroup','budget line','category','line'],
+  ref:['line key','externalid','external id','invoice','invoice #','vendorinvoicenumber','reference','ref','po #','po number','document'],
+  desc:['line description','description','memo','notes','expense','item'],
+  vendor:['vendor','pay to','supplier'],
+  date:['invoice date','date','post date','postdate']
+};
+function guessCol(headers, field){
+  const H = headers.map(h => String(h ?? '').toLowerCase().trim());
+  for (const a of ALIASES[field]) { const i = H.indexOf(a); if (i >= 0) return i; }
+  for (const a of ALIASES[field]) { const i = H.findIndex(h => h && h.includes(a)); if (i >= 0) return i; }
+  return -1;
+}
+function loadImport(buf, fname){
+  let wb; try { wb = XLSX.read(buf, {type:'array', cellDates:true}); } catch(e) { S.err = 'That file could not be read. Use an .xlsx or .csv export.'; return render(); }
+  const names = [...wb.SheetNames].sort((a,b) => (b === 'Sage Lines') - (a === 'Sage Lines'));
+  for (const sn of names) {
+    const aoa = XLSX.utils.sheet_to_json(wb.Sheets[sn], {header:1, raw:true, defval:null});
+    for (let r = 0; r < Math.min(15, aoa.length); r++) {
+      const row = aoa[r] || []; const strs = row.filter(v => typeof v === 'string' && v.trim()).length;
+      if (strs >= 2 && guessCol(row, 'job') >= 0 && guessCol(row, 'amount') >= 0) {
+        const headers = row.map(v => v == null ? '' : String(v));
+        const map = {}; Object.keys(ALIASES).forEach(f => map[f] = guessCol(headers, f));
+        if (map.amount === map.line) map.amount = guessCol(headers.map((h,i) => i === map.line ? '' : h), 'amount');
+        S.imp = {file:fname, sheet:sn, headers, rows: aoa.slice(r+1).filter(x => x && x.some(v => v != null && v !== '')), map, type:S.impType || 'sage_cost'};
+        S.err = ''; return render();
+      }
+    }
+  }
+  S.err = 'No sheet in ' + esc(fname) + ' has both a job column and an amount column in its first rows. Check the export, or rename the headers to Job and Amount.'; render();
+}
+function prepImport(){
+  const I = S.imp, T = IMPORT_TYPES[I.type], m = I.map; const out = [], skipped = {}, unmatched = {};
+  const skip = r => { skipped[r] = (skipped[r]||0) + 1; };
+  const prior = new Set(allCosts().map(r => r.k)), inFile = new Set();
+  const srcIdx = I.headers.findIndex(h => /^source$/i.test(String(h).trim()));
+  const whatIdx = I.headers.findIndex(h => /what happens/i.test(String(h)));
+  I.rows.forEach(row => {
+    const cell = i => (i == null || i < 0) ? null : row[i];
+    const amt = num(cell(m.amount)); if (amt == null || amt === 0) return skip('No amount');
+    const cc = String(cell(m.line) ?? '').trim();
+    if (T.st === 'sage') {
+      if (whatIdx >= 0 && !/send to innergy/i.test(String(cell(whatIdx) ?? ''))) { const w = String(cell(whatIdx) ?? '');
+        return skip(/PO/.test(w) ? 'PO invoice: already in Innergy' : /duplicate/i.test(w) ? 'Duplicate export' : /description/i.test(w) ? 'Job only in the description: fix in Sage' : /crosswalk/i.test(w) ? 'Job not in crosswalk' : 'Not a job cost'); }
+      if (srcIdx >= 0 && /^PO/i.test(String(cell(srcIdx) ?? ''))) return skip('PO invoice: already in Innergy');
+      if (cc === '2-03-01' || cc === '2-03-99') return skip('Mileage or parking: comes from the phone app');
+    }
+    const rawJob = String(cell(m.job) ?? '').trim(); if (!rawJob) return skip('No job');
+    const sage = resolveJob(rawJob); if (!sage) { unmatched[rawJob] = (unmatched[rawJob]||0) + 1; return; }
+    const line = T.st === 'sage' ? (ccmap()[cc] || (cc ? 'Unmapped ' + cc : 'Unassigned')) : (cc || (T.kind === 'contract' || T.kind === 'billed' ? '' : 'Unassigned'));
+    const dt = cell(m.date); const date = dt instanceof Date ? ymd(dt) : String(dt ?? '');
+    const ref = String(cell(m.ref) ?? ''), vendor = String(cell(m.vendor) ?? ''), desc = String(cell(m.desc) ?? '');
+    const k = [T.kind, sage, cc, ref, date, desc, amt.toFixed(2)].join('|');
+    if (inFile.has(k)) return skip('Duplicate in this file'); inFile.add(k);
+    if (prior.has(k)) return skip('Already imported earlier');
+    out.push({k, sage, line, kind:T.kind, amt:+amt.toFixed(2), ref, desc:(vendor && !desc.includes(vendor) ? vendor + ': ' : '') + desc, date, cc});
+  });
+  return {out, skipped, unmatched};
+}
+async function commitImport(){
+  const I = S.imp, T = IMPORT_TYPES[I.type]; const p = prepImport(); if (!p.out.length) { S.err = 'Nothing new to import from this file.'; return render(); }
+  const base = docId('IMP-' + Date.now()); const at = new Date().toISOString(); let n = 0;
+  for (let i = 0; i < p.out.length; i += 200) { // 200 rows per saved item keeps each under SharePoint's size limit
+    const ok = await save('imports/' + base + '-' + (i/200), {file:I.file, type:I.type, source:T.source, kind:T.kind, month:curMonth(), at, by:S.me||'', rows:p.out.slice(i, i+200), total:+p.out.slice(i, i+200).reduce((s,r)=>s+r.amt,0).toFixed(2)}, false);
+    if (!ok) return; n += Math.min(200, p.out.length - i);
+  }
+  S.imp = null; S.msg = n + ' rows imported from ' + I.file + '. They are on the WIP schedule now.'; render();
+}
+async function lockClose(){
+  const m = curMonth(); const jobs = {};
+  wipIds().map(wipRow).forEach(r => { jobs[r.sage] = {contract:r.contract, billed:r.billed, ctd:+r.ctd.toFixed(2), ctc:+r.ctc.toFixed(2), est:+r.est.toFixed(2), pct:r.pct, earned:r.earned == null ? null : +r.earned.toFixed(2), over:r.over == null ? null : +r.over.toFixed(2), reviewed:!!r.rv}; });
+  if (await save('closes/' + m, {month:m, lockedAt:new Date().toISOString(), by:S.me||'', jobs}, false) && await save('config/settings', {openMonth: nextMonth(m)}))
+    S.msg = monthName(m) + ' is locked. Its estimates are now "last close" for ' + monthName(nextMonth(m)) + '.';
+  render();
+}
+
+/* ---------- render ---------- */
+const ROUTES = ['start','mileage','wip','imports','jobs','distances','setup','trip'];
+function route(){ const h = (location.hash||'').replace('#',''); if (ROUTES.includes(h)) return h; let r = ''; try { r = localStorage.getItem('cimRole') || ''; } catch(e) {} return ROUTES.includes(r) ? r : 'start'; }
+const PILOT_URL = location.origin + location.pathname;
+const pilotUrl = () => String(S.settings.pilotUrl || PILOT_URL || '').replace(/#.*$/,'');
+function viewStart(){
+  const roles = [['trip','I drive to jobs','Installers: log each day\u2019s jobs from your phone. Takes about a minute.'],['mileage','I run payroll','Tammy: approve the trips installers sent and download the bank file.'],['wip','I close the month','Dani: see each job\u2019s cost, cost to complete, and over/under billing.'],['imports','I enter job costs','Abby: drop in the Sage and Innergy exports so nobody keys them twice.']];
+  let h = '<h1>Start here</h1><p class="lede">Pick what you do. The pilot remembers it on this device and opens there next time.</p><div class="roles">' +
+    roles.map(([r,t,d]) => '<button class="role" data-act="role" data-r="' + r + '"><b>' + t + '</b><span>' + d + '</span></button>').join('') + '</div>';
+  const nInst = installers().length, nTrips = Object.keys(S.trips).length, nAppr = Object.values(S.trips).filter(t => t.status === 'approved').length,
+    hasSage = Object.values(S.imports).some(x => x.type === 'sage_cost'), nRev = Object.keys(S.reviews).length;
+  const steps = [
+    [nInst > 0, 'Add the installers', 'Tammy, in <a href="#setup">Setup</a>: name and home base. Installers can also add themselves the first time they open Log a trip.', nInst + ' set up'],
+    [nTrips > 0, 'One installer sends a day', 'On their phone: Log a trip, pick the jobs in order, Send. The miles land on each job\u2019s WIP right away.', nTrips + ' sent'],
+    [nAppr > 0, 'Tammy approves it', 'On <a href="#mileage">Mileage</a>: Approve (or Approve all), then download the bank file.', nAppr + ' approved'],
+    [hasSage, 'Abby drops in a Sage export', 'On <a href="#imports">Imports</a>: drop the file, check the preview, Import. Same file twice adds nothing.', hasSage ? 'done' : ''],
+    [nRev > 0, 'Dani reviews one job', 'On <a href="#wip">WIP schedule</a>: open a job, check the cost to complete, Mark reviewed.', nRev + ' reviewed']];
+  h += '<div class="panel"><h2>First week: five steps</h2><ol class="steps">' + steps.map(([on,t,d,c],i) => '<li><span class="tick' + (on?' on':'') + '" aria-label="' + (on?'Done':'Not done yet') + '">' + (on?'&#10003;':(i+1)) + '</span><div><b>' + t + '</b>' + (c && on ? ' <span class="chip ok">' + esc(c) + '</span>' : '') + '<br><span class="note">' + d + '</span></div></li>').join('') + '</ol></div>';
+  h += '<div class="panel stack"><h2 style="margin:0">Get it on installers\u2019 phones</h2><p class="note" style="margin:0">Installers sign in with their CIM Microsoft 365 account and need access to the Job Cost list. Text them this link; it opens straight to Log a trip.</p>' +
+    '<div class="row"><input class="inp" readonly id="share-url" style="flex:1;min-width:220px" value="' + esc(pilotUrl() ? pilotUrl() + '#trip' : 'Set the pilot link in Setup first') + '"><button class="btn small" data-act="copyurl">Copy link</button></div>' +
+    '<p class="note" style="margin:0">No Microsoft 365 login for an installer yet? Tammy can open Log a trip on her own screen and send the day for them.</p></div>';
+  return h;
+}
+function render(){
+  const r = route();
+  document.querySelectorAll('#nav a').forEach(a => a.setAttribute('aria-current', a.getAttribute('href') === '#'+r ? 'page' : 'false'));
+  const app = $('#app');
+  const banner = (S.msg ? '<div class="okmsg" role="status">' + esc(S.msg) + '</div>' : '') + (S.err ? '<div class="errmsg" role="alert">' + S.err + '</div>' : '') + (S.loadErr ? '<div class="errmsg">' + esc(S.loadErr) + '</div>' : '');
+  if (!S.loaded) { app.innerHTML = '<p class="note">Loading shared jobs and distances&#8230;</p>'; return; }
+  if (S.gate) { document.body.classList.remove('phone'); app.innerHTML = viewGate(); bind('gate'); return; }
+  document.body.classList.toggle('phone', r === 'trip');
+  const needsSetup = S.db && !S.loadErr && !Object.keys(S.jobs).length;
+  app.innerHTML = banner + (needsSetup ? setupPanel() : '') + ({start:viewStart, mileage:viewMileage, wip:viewWip, imports:viewImports, jobs:viewJobs, distances:viewDistances, setup:viewSetup, trip:viewTrip}[r])();
+  bind(r);
+}
+function viewMileage(){
+  if (!S.week) { const ap = phoneDays('approved');
+    return '<h1>Mileage week</h1><p class="lede">Installers send each day from their phone, and it lands on the WIP schedule right away. Approve them here for payroll. Loading the Innergy timecard export is optional: it checks each phone day against the timecard and covers anyone who did not send one.</p>' + phonePanel() +
+    '<div class="panel"><h2>Finish the week</h2><p class="note" style="margin-top:0">' + ap.length + ' phone days approved.</p><div class="row"><button class="btn" data-act="bank" ' + (ap.length?'':'disabled') + '>Download bank file (CSV)</button><button class="btn" data-act="sage" ' + (ap.length?'':'disabled') + '>Download Sage lines (CSV)</button><button class="btn" data-act="innergy" ' + (ap.length?'':'disabled') + '>Download Innergy upload (XLSX)</button></div></div>' +
+    '<div class="panel"><h2>Check against timecards (optional)</h2><div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose a timecard export"><p style="margin:0 0 6px;font-weight:600">Drop the Time Tracking export here, or click to choose it</p><p class="note" style="margin:0">.xlsx from Innergy. Read in this browser only.</p></div></div>'; }
+  if (false) return '<h1>Mileage week</h1><p class="lede">Drop in Innergy&#8217;s Time Tracking export for the pay week. Each installer&#8217;s day is rebuilt from their timecard: home base, each job in order, back to base. Each leg is charged to the job driven to; the drive home goes to the last job.</p>' +
+    '<div class="panel"><div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose a timecard export"><p style="margin:0 0 6px;font-weight:600">Drop the Time Tracking export here, or click to choose it</p><p class="note" style="margin:0">.xlsx from Innergy. The file is read in this browser; only the posted mileage is saved.</p></div></div>';
+  const W = computeWeek(); const rate = W.rate;
+  const ready = W.days.filter(d => d.ready && !d.fromPhone), appr = approvedDays(W);
+  const totMi = W.days.reduce((s,d)=>s+d.mi,0), pk = weekParking();
+  let h = '<div class="row" style="margin-bottom:6px"><h1 style="margin:0">Week of ' + esc(mdy(S.week.start)) + '</h1><span class="spacer"></span><button class="btn" id="reload">Load a different file</button></div>' +
+    '<p class="lede">' + esc(S.week.fname) + ' at ' + money(rate) + ' a mile. Approve the ready days, then create the files and post to the WIP schedule.</p>';
+  h += '<div class="panel row"><div class="stat"><b>' + new Set(W.days.map(d=>d.who)).size + '</b><span>installers</span></div><div class="stat"><b>' + totMi + '</b><span>miles calculated</span></div><div class="stat"><b>' + money(totMi*rate) + '</b><span>mileage</span></div><div class="stat"><b>' + ready.length + ' / ' + W.days.length + '</b><span>days ready</span></div><div class="stat"><b>' + W.issues.length + '</b><span>to fix</span></div></div>';
+  h += phonePanel();
+  if (W.issues.length) {
+    h += '<div class="panel"><h2>Fix these first</h2>';
+    W.issues.forEach((x,i) => {
+      if (x.type === 'base') h += '<div class="issue"><p><b>' + esc(x.who) + '</b> has no home base set.</p><div class="row"><select class="inp" data-base-who="' + esc(x.who) + '"><option value="">Choose a base</option><option>Colorado Springs</option><option>Englewood</option></select><button class="btn small primary" data-act="setbase" data-who="' + esc(x.who) + '">Save base</button></div></div>';
+      if (x.type === 'job') { const t = x.tc || {}; h += '<div class="issue"><p><b>Job ' + esc(x.sage) + '</b> is not in the job crosswalk. The timecard links it to <b>' + esc(t.proj||'?') + '</b> ' + esc(t.pname||'') + '.</p><div class="row"><label>Miles from Colorado Springs <input class="inp" style="width:90px" data-j-cos="' + esc(x.sage) + '"></label><label>Miles from Englewood <input class="inp" style="width:90px" data-j-eng="' + esc(x.sage) + '"></label><button class="btn small primary" data-act="addjob" data-sage="' + esc(x.sage) + '">Add to crosswalk</button></div></div>'; }
+      if (x.type === 'basemiles') h += '<div class="issue"><p><b>Job ' + esc(x.sage) + '</b> ' + esc(jobName(x.sage)) + ' has no distance from ' + esc(x.base) + '.</p><div class="row"><input class="inp" style="width:90px" aria-label="Miles" data-bm="' + esc(x.sage) + '|' + esc(x.base) + '"><button class="btn small primary" data-act="savebm" data-k="' + esc(x.sage) + '|' + esc(x.base) + '">Save miles</button></div></div>';
+      if (x.type === 'leg') h += '<div class="issue"><p>No distance between <b>' + esc(x.a) + '</b> ' + esc(jobName(x.a)) + ' and <b>' + esc(x.b) + '</b> ' + esc(jobName(x.b)) + '. Enter it once; every later week reuses it.</p><div class="row"><input class="inp" style="width:90px" aria-label="Miles" data-leg="' + esc(key(x.a,x.b)) + '"><button class="btn small primary" data-act="saveleg" data-a="' + esc(x.a) + '" data-b="' + esc(x.b) + '">Save distance</button></div></div>';
+    });
+    h += '</div>';
+  }
+  const byWho = {}; W.days.forEach(d => (byWho[d.who] = byWho[d.who] || []).push(d));
+  for (const [who, ds] of Object.entries(byWho)) {
+    const mi = ds.reduce((s,d)=>s+d.mi,0);
+    h += '<div class="panel"><div class="row" style="margin-bottom:8px"><h2 style="margin:0">' + esc(who) + '</h2><span class="note">' + esc((S.settings.bases||{})[who] || 'no base set') + '</span><span class="spacer"></span><b>' + mi + ' mi &nbsp; ' + money(mi*rate) + '</b></div><div class="scroll"><table><thead><tr><th>Approve</th><th>Day</th><th>Route from timecard</th><th class="num">Miles</th><th class="num">Amount</th><th>Status</th></tr></thead><tbody>';
+    ds.forEach(d => {
+      const routeTxt = ['Base', ...d.stops.map(s => s + (jobName(s) ? ' ' + jobName(s) : '')), 'Base'].join(' → ');
+      const legs = '<table class="legs"><tbody>' + d.legs.map(l => '<tr><td>' + esc(l.a) + ' → ' + esc(l.b) + '</td><td>charged to ' + esc(l.charge) + '</td><td class="num">' + (l.mi == null ? 'missing' : l.mi + ' mi') + '</td><td class="num">' + money(l.amt) + '</td></tr>').join('') + '</tbody></table>';
+      h += '<tr class="' + (d.ready ? '' : 'flag') + '"><td><input type="checkbox" aria-label="Approve ' + esc(dayName(d.date)) + '" data-appr="' + esc(d.id) + '" ' + (S.approved[d.id] ? 'checked' : '') + ' ' + (d.ready && !d.fromPhone ? '' : 'disabled') + '></td><td style="white-space:nowrap">' + esc(dayName(d.date)) + '</td><td><details><summary>' + esc(routeTxt) + '</summary>' + legs + '</details></td><td class="num">' + d.mi + '</td><td class="num">' + money(d.amt) + '</td><td>' + (d.fromPhone ? '<span class="chip ' + (d.phoneMatch ? 'ok' : 'warn') + '">Sent from phone' + (d.phoneMatch ? '' : ': route differs') + '</span>' : d.ready ? (S.approved[d.id] ? '<span class="chip ok">Approved</span>' : '<span class="chip">Ready</span>') : '<span class="chip warn">Fix above</span>') + '</td></tr>';
+    });
+    h += '</tbody></table></div></div>';
+  }
+  const jobsInWeek = [...new Set(W.days.flatMap(d => d.stops))];
+  const whos = Object.keys(byWho);
+  h += '<div class="panel"><h2>Parking receipts</h2><div class="row" style="margin-bottom:10px"><select class="inp" id="pkWho" aria-label="Installer"><option value="">Installer</option>' + whos.map(w => '<option ' + (S.pk.who===w?'selected':'') + '>' + esc(w) + '</option>').join('') + '</select><select class="inp" id="pkJob" aria-label="Job"><option value="">Job</option>' + jobsInWeek.map(j => '<option value="' + esc(j) + '" ' + (S.pk.job===j?'selected':'') + '>' + esc(j + ' ' + jobName(j)) + '</option>').join('') + '</select><input class="inp" id="pkAmt" style="width:110px" placeholder="Amount" aria-label="Amount" value="' + esc(S.pk.amt) + '"><button class="btn small primary" data-act="addpk">Add parking</button></div>';
+  h += pk.length ? '<table><thead><tr><th>Installer</th><th>Job</th><th class="num">Amount</th><th>Sage code</th><th></th></tr></thead><tbody>' + pk.map(p => '<tr><td>' + esc(p.who) + '</td><td>' + esc(p.sage + ' ' + jobName(p.sage)) + '</td><td class="num">' + money(Number(p.amt)||0) + '</td><td>2-03-99</td><td><button class="linkbtn" data-act="delpk" data-id="' + esc(p.id) + '">Remove</button></td></tr>').join('') + '</tbody></table>' : '<p class="note" style="margin:0">No parking this week yet.</p>';
+  h += '</div>';
+  h += '<div class="panel"><h2>Finish the week</h2><p class="note" style="margin-top:0">' + appr.length + ' of ' + ready.length + ' ready days approved. Files include approved timecard days plus approved phone days; posting adds the timecard days to WIP.</p><div class="row"><button class="btn" data-act="apprall" ' + (ready.length ? '' : 'disabled') + '>Approve all ready days</button><button class="btn" data-act="bank" ' + (appr.length?'':'disabled') + '>Download bank file (CSV)</button><button class="btn" data-act="sage" ' + (appr.length?'':'disabled') + '>Download Sage lines (CSV)</button><button class="btn" data-act="innergy" ' + (appr.length?'':'disabled') + '>Download Innergy upload (XLSX)</button><button class="btn primary" data-act="post" ' + (appr.some(d=>!d.phone) && S.canWrite?'':'disabled') + '>Post to WIP schedule</button></div><p class="note">The Innergy file matches the Input sheet of INNERGY_addedExpenses, with a MIL- External ID per installer and job so its duplicate check works. Parking posts to WIP when it is added.</p></div>';
+  return h;
+}
+const WIPF = [['contract','Original contract'],['co','Approved change orders'],['billed','Billed to date'],['innergy','Innergy costs to date'],['sage','Sage-only costs to date'],['openpo','Open POs not invoiced'],['sub','Subcontract balance + retainage payable'],['budget','Budget not yet bought'],['hrs','Labor hours left'],['rate','Labor rate'],['last','Last month est. total cost']];
+const f0 = v => v == null ? '' : money0(v);
+const pc1 = v => v == null ? '' : (v*100).toFixed(1) + '%';
+function closeChecklist(rows){
+  const m = curMonth(); const imps = Object.values(S.imports).filter(i => !i.removed && i.month === m);
+  const has = t => imps.some(i => i.type === t);
+  const pend = Object.values(S.trips).filter(t => t.date.slice(0,6) === m && (t.status === 'posted' || t.status === 'check')).length;
+  const rev = rows.filter(r => r.rv && !r.stale).length;
+  const step = (done, txt, extra) => '<li style="margin:4px 0"><span class="chip ' + (done ? 'ok' : 'warn') + '">' + (done ? 'Done' : 'To do') + '</span> ' + txt + (extra ? ' <span class="note">' + extra + '</span>' : '') + '</li>';
+  return '<div class="panel"><h2>' + esc(monthName(m)) + ' close</h2><ol style="margin:0;padding-left:20px">' +
+    step(has('sage_cost'), 'Import Sage job costs', '<a href="#imports">Imports</a>') +
+    step(has('inn_cost') && has('inn_budget'), 'Import Innergy costs and budgets', (has('inn_po') ? '' : 'open POs too, if you track them') ) +
+    step(has('billed') || rows.every(r => r.billed != null), 'Billed to date for every job') +
+    step(pend === 0, 'Approve every mileage day in ' + shortMonth(m), pend ? pend + ' waiting on the Mileage week tab' : '') +
+    step(rows.length && rev === rows.length, 'Review every job', rev + ' of ' + rows.length + ' reviewed') +
+    '</ol><div class="row" style="margin-top:12px"><button class="btn primary" data-act="lock" ' + (S.canWrite && rows.length ? '' : 'disabled') + '>Lock ' + esc(monthName(m)) + '</button><span class="note">Locking saves every job&#8217;s numbers as they stand. Next month compares against them, so a late change on a nearly finished job is caught.</span></div></div>';
+}
+function viewWip(){
+  const rows = wipIds().map(wipRow);
+  const pc = priorClose();
+  let h = '<div class="row" style="margin-bottom:6px"><h1 style="margin:0">WIP schedule: ' + esc(monthName(curMonth())) + '</h1><span class="spacer"></span><button class="btn small" data-act="wipxlsx" ' + (rows.length?'':'disabled') + '>Download WIP (XLSX)</button></div>' +
+    '<p class="lede">What is coming in, what has gone out, and what it will take to finish each job. Costs arrive from Sage and Innergy imports and the mileage app; you set every cost to complete and sign off each job. ' + (pc ? 'Compared with the ' + esc(monthName(pc.month)) + ' close.' : 'No earlier close is locked yet, so there is nothing to compare against.') + '</p>';
+  h += closeChecklist(rows);
+  const fl = S.wipFilter || 'all';
+  const shown = rows.filter(r => fl === 'all' || (fl === 'flag' && r.flags.some(x => x.indexOf('Needs') !== 0)) || (fl === 'todo' && (!r.rv || r.stale)));
+  h += '<div class="panel row"><div class="row" role="group" aria-label="Show">' + [['all','All jobs'],['flag','Flagged'],['todo','Not reviewed']].map(([k,t]) => '<button class="btn small' + (fl===k?' primary':'') + '" data-act="wipf" data-f="' + k + '" aria-pressed="' + (fl===k) + '">' + t + '</button>').join('') +
+    '</div><span class="spacer"></span><label>Add a job <input class="inp" id="addWip" style="width:110px" placeholder="Sage #"></label><button class="btn small" data-act="addwip">Add</button></div>';
+  if (!rows.length) return h + '<div class="panel"><p style="margin:0">No jobs yet. Import Sage or Innergy costs on the <a href="#imports">Imports</a> tab, post a mileage week, or add a job above.</p></div>';
+  h += '<div class="panel scroll" style="padding:0"><table class="wip"><thead><tr class="grp"><th></th><th colspan="2">Coming in</th><th colspan="2">Going out</th><th colspan="6">Result</th><th colspan="3">Since last close</th><th colspan="2"></th></tr><tr><th>Job</th><th class="num">Contract</th><th class="num">Billed</th><th class="num">Cost to date</th><th class="num">Cost to complete</th><th class="num">Est. total cost</th><th class="num">% complete</th><th class="num">Earned</th><th class="num">Over / (under) billed</th><th class="num">Gross profit</th><th class="num">Margin</th><th class="num">Last close est.</th><th class="num">Change</th><th class="num">% then</th><th>Flag</th><th>Reviewed</th></tr></thead><tbody>';
+  shown.forEach(r => {
+    h += '<tr class="' + (r.flag !== 'OK' && r.flag.indexOf('Needs') !== 0 ? 'flag' : '') + '"><td style="min-width:200px"><button class="linkbtn" data-act="sel" data-sage="' + esc(r.sage) + '">' + esc(r.sage) + '</button> <span class="note">' + esc(r.proj) + '</span><br>' + esc(r.name) + '</td>' +
+      '<td class="num">' + f0(r.contract) + '</td><td class="num">' + f0(r.billed) + '</td><td class="num"><b>' + money0(r.ctd) + '</b></td><td class="num"><b>' + money0(r.ctc) + '</b>' + (r.useLines ? '' : '<br><span class="note">manual</span>') + '</td><td class="num"><b>' + money0(r.est) + '</b></td><td class="num">' + pc1(r.pct) + '</td><td class="num">' + f0(r.earned) + '</td><td class="num">' + f0(r.over) + '</td><td class="num">' + f0(r.gp) + '</td><td class="num">' + pc1(r.margin) + '</td>' +
+      '<td class="num">' + f0(r.last) + '</td><td class="num">' + f0(r.chg) + '</td><td class="num">' + pc1(r.lastPct) + '</td>' +
+      '<td style="min-width:190px">' + (r.flags.length ? r.flags.map(x => '<span class="chip warn" style="margin:1px 0">' + esc(x) + '</span>').join('<br>') : '<span class="chip ok">OK</span>') + '</td>' +
+      '<td style="min-width:130px">' + (r.rv ? (r.stale ? '<span class="chip warn">Changed since review</span>' : '<span class="chip ok">' + esc(nameOf(r.rv.by)) + '</span>') : '<button class="btn small" data-act="sel" data-sage="' + esc(r.sage) + '">Review</button>') + '</td></tr>';
+  });
+  const T = k => rows.reduce((s,r) => s + (Number(r[k])||0), 0);
+  h += '<tr><td><b>Total, ' + rows.length + ' jobs</b></td><td class="num"><b>' + money0(T('contract')) + '</b></td><td class="num"><b>' + money0(T('billed')) + '</b></td><td class="num"><b>' + money0(T('ctd')) + '</b></td><td class="num"><b>' + money0(T('ctc')) + '</b></td><td class="num"><b>' + money0(T('est')) + '</b></td><td></td><td class="num"><b>' + money0(T('earned')) + '</b></td><td class="num"><b>' + money0(T('over')) + '</b></td><td class="num"><b>' + money0(T('gp')) + '</b></td><td colspan="6"></td></tr>';
+  h += '</tbody></table></div>';
+  if (S.sel) h += jobDetail(wipRow(S.sel));
+  const hist = Object.keys(S.closes).sort().reverse();
+  if (hist.length) h += '<div class="panel"><h2>Locked closes</h2><table><thead><tr><th>Month</th><th>Locked</th><th>By</th><th class="num">Jobs</th><th class="num">Est. total cost</th><th></th></tr></thead><tbody>' +
+    hist.map((m,i) => { const c = S.closes[m]; const js = Object.values(c.jobs||{}); return '<tr><td>' + esc(monthName(m)) + '</td><td>' + esc(String(c.lockedAt||'').slice(0,10)) + '</td><td>' + esc(nameOf(c.by)) + '</td><td class="num">' + js.length + '</td><td class="num">' + money0(js.reduce((s,j)=>s+(Number(j.est)||0),0)) + '</td><td>' + (i === 0 ? '<button class="linkbtn" data-act="reopen" data-m="' + esc(m) + '">Reopen</button>' : '') + '</td></tr>'; }).join('') + '</tbody></table></div>';
+  return h;
+}
+function jobDetail(r){
+  const dis = S.canWrite ? '' : 'disabled';
+  let h = '<div class="panel" id="detail"><div class="row"><h2 style="margin:0">' + esc(r.sage + ' ' + r.name) + ' <span class="note">' + esc(r.proj) + '</span></h2><span class="spacer"></span><button class="btn small" data-act="sel" data-sage="">Close</button></div>';
+  h += '<div class="row" style="margin:12px 0">' + [['Contract', f0(r.contract)],['Billed', f0(r.billed)],['Cost to date', money0(r.ctd)],['Cost to complete', money0(r.ctc)],['Est. total cost', money0(r.est)],['% complete', pc1(r.pct) + (r.lastPct != null ? ' (was ' + pc1(r.lastPct) + ')' : '')],['Over / (under) billed', f0(r.over)],['Margin', pc1(r.margin)]].map(([k,v]) => '<div class="stat"><b>' + (v || '&#8212;') + '</b><span>' + k + '</span></div>').join('') + '</div>';
+  if (r.flags.length) h += '<p style="margin:0 0 10px">' + r.flags.map(x => '<span class="chip warn">' + esc(x) + '</span>').join(' ') + '</p>';
+  h += '<h2>Cost to complete, by budget line</h2>';
+  if (r.lines.length) {
+    h += '<div class="scroll"><table><thead><tr><th>Budget line</th><th class="num">Budget</th><th class="num">Cost to date</th><th class="num">Open POs</th><th class="num">Budget left</th><th class="num">Suggested</th><th class="num">Cost to complete</th><th>Cross off</th><th>Note</th></tr></thead><tbody>' +
+      r.lines.map(l => { const k = esc(r.sage + '|' + l.line);
+        return '<tr class="' + (l.hasBudget && l.ctd > l.budget ? 'flag' : '') + '"><td><b>' + esc(l.line) + '</b></td><td class="num">' + (l.hasBudget ? money0(l.budget) : '<input class="cell" style="width:100px" inputmode="decimal" placeholder="add" aria-label="Budget for ' + esc(l.line) + '" data-line="' + k + '" data-k="budget" ' + dis + '>') + '</td><td class="num">' + money0(l.ctd) + '</td><td class="num">' + money0(l.openpo) + '</td><td class="num">' + money0(l.left) + '</td><td class="num note">' + money0(l.sug) + '</td>' +
+          '<td class="num"><input class="cell" style="width:110px' + (l.override ? ';font-weight:600' : '') + '" inputmode="decimal" aria-label="Cost to complete for ' + esc(l.line) + '" data-line="' + k + '" data-k="ctc" value="' + esc(l.override ? Math.round(l.ctc) : '') + '" placeholder="' + esc(Math.round(l.sug)) + '" ' + dis + '></td>' +
+          '<td><input type="checkbox" aria-label="Cross off ' + esc(l.line) + '" data-cross="' + k + '" ' + (l.crossed ? 'checked' : '') + ' ' + dis + '></td><td><input class="cell text" style="min-width:160px" aria-label="Note for ' + esc(l.line) + '" data-line="' + k + '" data-k="note" value="' + esc(l.note) + '" ' + dis + '></td></tr>'; }).join('') +
+      '<tr><td><b>Total</b></td><td class="num"><b>' + money0(r.lines.reduce((s,l)=>s+l.budget,0)) + '</b></td><td class="num"><b>' + money0(r.lines.reduce((s,l)=>s+l.ctd,0)) + '</b></td><td class="num"><b>' + money0(r.lines.reduce((s,l)=>s+l.openpo,0)) + '</b></td><td></td><td></td><td class="num"><b>' + money0(r.lines.reduce((s,l)=>s+l.ctc,0)) + '</b></td><td colspan="2"></td></tr></tbody></table></div>';
+    h += '<p class="note">Suggested = budget left or open POs, whichever is larger. Crossing a line off means its remaining budget will not be spent; only its open POs stay. Leave a cost to complete blank to use the suggestion.' + (r.useLines ? '' : ' No line has a budget or open POs yet, so cost to complete still comes from the manual entries below.') + '</p>';
+  } else h += '<p class="note">No budget lines yet. Import Innergy budgets on the <a href="#imports">Imports</a> tab, or add a line here.</p>';
+  h += '<div class="row" style="margin-bottom:14px"><input class="inp" id="nl-line" placeholder="Budget line, e.g. Installation" style="width:230px"><input class="inp" id="nl-budget" placeholder="Budget" inputmode="decimal" style="width:120px"><button class="btn small" data-act="addline" data-sage="' + esc(r.sage) + '" ' + dis + '>Add budget line</button></div>';
+  const costRows = r.a.rows.filter(x => x.kind === 'cost').sort((a,b) => String(b.date).localeCompare(String(a.date)));
+  const legs = Object.values(S.mileage).filter(m => m.sage === r.sage).sort((a,b) => (a.date+a.who).localeCompare(b.date+b.who));
+  const pks = Object.values(S.parking).filter(p => p.sage === r.sage && p.posted);
+  h += '<details' + (costRows.length + legs.length < 15 ? ' open' : '') + '><summary><b>Where the cost to date came from</b> <span class="note">' + costRows.length + ' imported lines, ' + legs.length + ' mileage legs</span></summary><div class="scroll"><table style="margin-top:8px"><thead><tr><th>Source</th><th>Date</th><th>Description</th><th>Line</th><th class="num">Amount</th></tr></thead><tbody>' +
+    costRows.slice(0,200).map(x => '<tr><td>' + esc(x.source) + '</td><td>' + esc(x.date) + '</td><td>' + esc(x.desc || x.ref) + '</td><td>' + esc(x.line) + '</td><td class="num">' + money(Number(x.amt)||0) + '</td></tr>').join('') +
+    legs.map(m => '<tr><td>Mileage' + (m.trip ? ' (phone)' : '') + '</td><td>' + esc(m.date) + '</td><td>' + esc(m.who + ': ' + m.from + ' → ' + m.to) + '</td><td>' + MILE_LINE + '</td><td class="num">' + money(Number(m.amount)||0) + '</td></tr>').join('') +
+    pks.map(p => '<tr><td>Parking</td><td>week of ' + esc(p.week) + '</td><td>' + esc(p.who) + '</td><td>' + MILE_LINE + '</td><td class="num">' + money(Number(p.amt)||0) + '</td></tr>').join('') +
+    '</tbody></table></div></details>';
+  const inp = k => '<input class="cell" style="width:120px" inputmode="decimal" aria-label="' + esc(k) + '" data-wip="' + esc(r.sage) + '" data-k="' + k + '" value="' + esc(r.w[k] ?? '') + '" ' + dis + '>';
+  h += '<details style="margin-top:10px"' + (r.a.rows.length ? '' : ' open') + '><summary><b>Manual entries</b> <span class="note">used only where no import supplies the number</span></summary><div class="row" style="margin-top:8px;align-items:flex-end">' +
+    WIPF.filter(([k]) => k !== 'last' || !priorClose()).map(([k,t]) => '<label class="note" style="display:flex;flex-direction:column;gap:3px">' + esc(t) + inp(k) + '</label>').join('') + '</div></details>';
+  const rv = r.rv;
+  h += '<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line)"><h2>Review for ' + esc(monthName(curMonth())) + '</h2>' +
+    (rv ? '<p style="margin:0 0 8px">' + (r.stale ? '<span class="chip warn">Changed since review</span> ' : '<span class="chip ok">Reviewed</span> ') + 'by ' + esc(nameOf(rv.by)) + ' on ' + esc(String(rv.at).slice(0,10)) + ' at ' + money0(Number(rv.est)||0) + ' estimated total cost.' + (rv.note ? ' Note: ' + esc(rv.note) : '') + '</p>' : '') +
+    '<textarea id="rv-note" class="inp" rows="2" style="width:100%;max-width:640px" placeholder="What you checked, or what the PM confirmed" aria-label="Review note" ' + dis + '>' + esc(rv && !r.stale ? rv.note || '' : '') + '</textarea><div class="row" style="margin-top:8px"><button class="btn primary" data-act="review" data-sage="' + esc(r.sage) + '" ' + dis + '>' + (rv && !r.stale ? 'Update review' : 'Mark reviewed') + '</button>' + (rv ? '<button class="btn" data-act="unreview" data-sage="' + esc(r.sage) + '" ' + dis + '>Clear review</button>' : '') + '</div></div>';
+  return h + '</div>';
+}
+function viewImports(){
+  let h = '<h1>Imports</h1><p class="lede">Bring in each month&#8217;s numbers from Sage and Innergy instead of typing them. Every job number or name is translated through the Jobs list, so a Sage number, its Innergy project number (P-26-1146-001) and the job&#8217;s name all land on the same job. Nothing is counted twice: PO invoices, mileage codes and rows already imported are skipped.</p>';
+  if (!S.imp) {
+    h += '<div class="panel stack"><label>What are you importing?<select id="impType">' + Object.entries(IMPORT_TYPES).map(([k,t]) => '<option value="' + k + '" ' + ((S.impType||'sage_cost')===k?'selected':'') + '>' + esc(t.label) + '</option>').join('') + '</select></label>' +
+      '<div class="drop" id="impdrop" tabindex="0" role="button" aria-label="Choose a file to import"><p style="margin:0 0 6px;font-weight:600">Drop the export here, or click to choose it</p><p class="note" style="margin:0">.xlsx or .csv. For Sage, the Sage Lines sheet of the bridge workbook works today; a Sage Excel export works once its columns are mapped.</p></div></div>';
+  } else {
+    const I = S.imp, T = IMPORT_TYPES[I.type]; const p = prepImport();
+    const sel = (f, label, req) => '<label style="display:flex;flex-direction:column;gap:3px" class="note">' + label + (req ? ' (required)' : '') + '<select class="inp" data-map="' + f + '"><option value="-1">None</option>' + I.headers.map((x,i) => '<option value="' + i + '" ' + (I.map[f]===i?'selected':'') + '>' + esc(x || 'Column ' + (i+1)) + '</option>').join('') + '</select></label>';
+    h += '<div class="panel"><div class="row"><h2 style="margin:0">' + esc(I.file) + '</h2><span class="note">sheet ' + esc(I.sheet) + ', ' + I.rows.length + ' rows, as ' + esc(T.label) + '</span><span class="spacer"></span><button class="btn small" data-act="impcancel">Cancel</button></div>' +
+      '<div class="row" style="margin:12px 0;align-items:flex-end">' + sel('job','Job',1) + sel('amount','Amount',1) + sel('line', T.lineLabel) + sel('ref','Reference') + sel('desc','Description') + sel('vendor','Vendor') + sel('date','Date') + '</div>' +
+      '<div class="row"><div class="stat"><b>' + p.out.length + '</b><span>rows to import</span></div><div class="stat"><b>' + money0(p.out.reduce((s,r)=>s+r.amt,0)) + '</b><span>total</span></div><div class="stat"><b>' + new Set(p.out.map(r=>r.sage)).size + '</b><span>jobs</span></div><div class="stat"><b>' + Object.keys(p.unmatched).length + '</b><span>job names to translate</span></div></div>';
+    if (Object.keys(p.skipped).length) h += '<p class="note" style="margin:10px 0 0">Skipped: ' + Object.entries(p.skipped).map(([k,v]) => esc(k) + ' (' + v + ')').join(' &#183; ') + '</p>';
+    const lineSet = {}; p.out.forEach(r => lineSet[r.line] = (lineSet[r.line]||0) + r.amt);
+    if (Object.keys(lineSet).length) h += '<p class="note" style="margin:6px 0 0">Budget lines: ' + Object.entries(lineSet).map(([k,v]) => esc(k || 'whole job') + ' ' + money0(v)).join(' &#183; ') + '</p>';
+    h += '</div>';
+    if (Object.keys(p.unmatched).length) {
+      h += '<div class="panel"><h2>Translate these to a job</h2><p class="note" style="margin-top:0">Pick the job each one means. It is saved on the Jobs list, so the same name or number is recognized in every later import.</p><table><thead><tr><th>As written in the file</th><th class="num">Rows</th><th>Is this job</th></tr></thead><tbody>' +
+        Object.entries(p.unmatched).map(([raw,n]) => '<tr><td>' + esc(raw) + '</td><td class="num">' + n + '</td><td><select class="inp" data-assign="' + esc(raw) + '" ' + (S.canWrite?'':'disabled') + '>' + jobOptions('') + '</select></td></tr>').join('') + '</tbody></table></div>';
+    }
+    h += '<div class="panel row"><button class="btn primary" data-act="impgo" ' + (p.out.length && S.canWrite ? '' : 'disabled') + '>Import ' + p.out.length + ' rows</button><span class="note">' + (Object.keys(p.unmatched).length ? 'Rows with untranslated jobs stay out until you pick a job for them.' : '') + '</span></div>';
+  }
+  const list = Object.entries(S.imports).sort((a,b) => String(b[1].at).localeCompare(String(a[1].at)));
+  h += '<div class="panel"><h2>Imported so far</h2>' + (list.length ? '<div class="scroll"><table><thead><tr><th>When</th><th>File</th><th>What</th><th>Close</th><th class="num">Rows</th><th class="num">Total</th><th></th></tr></thead><tbody>' +
+    list.map(([id,i]) => '<tr style="' + (i.removed ? 'opacity:.5' : '') + '"><td>' + esc(String(i.at).slice(0,10)) + '</td><td>' + esc(i.file) + '</td><td>' + esc((IMPORT_TYPES[i.type]||{}).label || i.type) + '</td><td>' + esc(i.month ? shortMonth(i.month) : '') + '</td><td class="num">' + (i.rows||[]).length + '</td><td class="num">' + money0(Number(i.total)||0) + '</td><td>' + (i.removed ? 'Removed <button class="linkbtn" data-act="impundo" data-id="' + esc(id) + '">Restore</button>' : '<button class="linkbtn" data-act="impdel" data-id="' + esc(id) + '">Remove</button>') + '</td></tr>').join('') + '</tbody></table></div>' : '<p class="note" style="margin:0">Nothing imported yet.</p>') + '</div>';
+  return h;
+}
+function viewJobs(){
+  const q = S.jobFilter.toLowerCase();
+  const list = Object.entries(S.jobs).filter(([id,j]) => !q || JSON.stringify(j).toLowerCase().includes(q)).sort((a,b) => String(a[1].proj).localeCompare(String(b[1].proj)));
+  const cell = (id,k,v,w,cls='text') => '<input class="cell ' + cls + '" style="min-width:' + w + 'px" aria-label="' + esc(k) + ' for ' + esc(id) + '" data-job="' + esc(id) + '" data-k="' + k + '" value="' + esc(v ?? '') + '" ' + (S.canWrite?'':'disabled') + '>';
+  let h = '<h1>Jobs</h1><p class="lede">One job, every number it goes by. Sage 261146 is 1146 in the mileage tables and P-26-1146 in Innergy; older jobs follow no pattern (Sage 6034 is P-25-1024). Every lookup in the pilot goes through this list.</p>';
+  h += '<div class="panel row"><label>Search <input class="inp" id="jobq" value="' + esc(S.jobFilter) + '" placeholder="Number or name"></label><span class="spacer"></span><span class="note">' + list.length + ' of ' + Object.keys(S.jobs).length + ' jobs</span></div>';
+  h += '<div class="panel"><h2>Add a job</h2><div class="row"><input class="inp" id="nj-sage" placeholder="Sage job #" style="width:120px"><input class="inp" id="nj-proj" placeholder="Innergy project" style="width:140px"><input class="inp" id="nj-name" placeholder="Name" style="width:220px"><input class="inp" id="nj-cos" placeholder="Miles from Colorado Springs" style="width:210px"><input class="inp" id="nj-eng" placeholder="Miles from Englewood" style="width:170px"><button class="btn small primary" data-act="newjob">Add job</button></div></div>';
+  h += '<div class="panel scroll" style="padding:0"><table><thead><tr><th>Sage job #</th><th>Short #</th><th>Innergy project</th><th>Other numbers</th><th>Name</th><th>From Colorado Springs</th><th>From Englewood</th><th>Status</th></tr></thead><tbody>' +
+    list.map(([id,j]) => '<tr><td><b>' + esc(j.sage) + '</b></td><td>' + cell(id,'short',j.short,70) + '</td><td>' + cell(id,'proj',j.proj,110) + '</td><td>' + cell(id,'alias',j.alias,90) + '</td><td>' + cell(id,'iname',j.iname || j.tname,220) + '</td><td>' + cell(id,'cos',j.cos,70,'') + '</td><td>' + cell(id,'eng',j.eng,70,'') + '</td><td><span class="chip ' + (j.status==='Confirmed'?'ok':(/confirm|Not found|Two/.test(j.status||'')?'warn':'')) + '">' + esc(j.status||'Added') + '</span></td></tr>').join('') + '</tbody></table></div>';
+  return h;
+}
+function viewDistances(){
+  const list = Object.entries(S.legs).sort((a,b)=>a[0].localeCompare(b[0]));
+  let h = '<h1>Distances between jobs</h1><p class="lede">Base-to-job miles live on the Jobs list. These are the legs between two jobs on the same day, entered once and read in both directions.</p>';
+  h += '<div class="panel"><h2>Add a distance</h2><div class="row"><input class="inp" id="nl-a" placeholder="From Sage job #" style="width:150px"><input class="inp" id="nl-b" placeholder="To Sage job #" style="width:150px"><input class="inp" id="nl-mi" placeholder="Miles" style="width:90px"><button class="btn small primary" data-act="newleg">Add distance</button></div></div>';
+  h += '<div class="panel scroll" style="padding:0"><table><thead><tr><th>Between</th><th>And</th><th class="num">Miles</th><th>Note</th><th></th></tr></thead><tbody>' +
+    (list.length ? list.map(([id,l]) => '<tr><td>' + esc(l.a + ' ' + jobName(l.a)) + '</td><td>' + esc(l.b + ' ' + jobName(l.b)) + '</td><td class="num"><input class="cell" style="width:90px" aria-label="Miles" data-legedit="' + esc(id) + '" value="' + esc(l.miles) + '" ' + (S.canWrite?'':'disabled') + '></td><td class="note">' + esc(l.note||'') + '</td><td><button class="linkbtn" data-act="delleg" data-id="' + esc(id) + '">Remove</button></td></tr>').join('') : '<tr><td colspan="5">No distances yet.</td></tr>') + '</tbody></table></div>';
+  return h;
+}
+function viewSetup(){
+  const names = new Set([...Object.keys(S.settings.bases||{}), ...(S.week ? S.week.days.map(d=>d.who) : [])]);
+  let h = '<h1>Setup</h1><p class="lede">Shared settings for everyone using the pilot.</p><div class="panel"><h2>Mileage</h2><div class="row"><label>Rate per mile <input class="inp" id="rate" style="width:100px" value="' + esc(S.settings.rate) + '"></label><button class="btn small primary" data-act="saverate">Save rate</button><span class="note">$0.58 is the rate in Tammy&#8217;s 10/14 calculations.</span></div></div>';
+  h += '<div class="panel"><h2>Pilot link</h2><div class="row"><input class="inp" id="purl" style="flex:1;min-width:260px" placeholder="https://..." value="' + esc(pilotUrl()) + '"><button class="btn small primary" data-act="savepurl">Save link</button></div><p class="note" style="margin:6px 0 0">The link people open. Leave it as is unless the pilot moves; the Start page builds the installer phone link from it.</p></div>';
+  h += '<div class="panel"><h2>Add an installer</h2><div class="row"><input class="inp" id="ni-name" placeholder="Name as on the timecard" style="width:240px"><select class="inp" id="ni-base"><option value="">Home base</option><option>Colorado Springs</option><option>Englewood</option></select><button class="btn small primary" data-act="addinst">Add installer</button></div></div>';
+  h += '<div class="panel"><h2>Installer home bases</h2>' + (names.size ? '<table><thead><tr><th>Installer</th><th>Home base</th></tr></thead><tbody>' + [...names].sort().map(n => '<tr><td>' + esc(n) + '</td><td><select class="inp" data-setbase="' + esc(n) + '"><option value="">Not set</option>' + ['Colorado Springs','Englewood'].map(b => '<option ' + ((S.settings.bases||{})[n]===b?'selected':'') + '>' + b + '</option>').join('') + '</select></td></tr>').join('') + '</tbody></table>' : '<p class="note" style="margin:0">Installers appear here after a timecard file is loaded.</p>') + '</div>';
+  h += '<div class="panel"><h2>WIP flags</h2><div class="row"><label>Late-change flag at % complete <input class="inp" id="lateCut" style="width:80px" value="' + esc(Math.round(S.settings.lateCut*100)) + '"></label><label>and estimate change over $ <input class="inp" id="lateAmt" style="width:100px" value="' + esc(S.settings.lateAmt) + '"></label><label>% complete jump flag over <input class="inp" id="jumpPts" style="width:70px" value="' + esc(S.settings.jumpPts||15) + '"> pts</label><button class="btn small primary" data-act="saveflags">Save flags</button></div></div>';
+  const cm = ccmap(); h += '<div class="panel"><h2>Sage cost code to budget line</h2><p class="note" style="margin-top:0">Sage job costs land on these budget lines. Match the names to Innergy&#8217;s budget groups so Sage costs and Innergy budgets meet on the same line.</p><div class="scroll"><table><thead><tr><th>Sage cost code</th><th>Budget line</th></tr></thead><tbody>' + Object.keys(cm).sort().map(k => '<tr><td>' + esc(k) + '</td><td><input class="cell text" data-cc="' + esc(k) + '" value="' + esc(cm[k]) + '" aria-label="Budget line for ' + esc(k) + '" ' + (S.canWrite?'':'disabled') + '></td></tr>').join('') + '</tbody></table></div><div class="row" style="margin-top:8px"><input class="inp" id="cc-new" placeholder="New cost code" style="width:140px"><input class="inp" id="cc-line" placeholder="Budget line" style="width:180px"><button class="btn small" data-act="addcc">Add</button></div></div>';
+  h += '<div class="panel"><h2>Lists behind the pilot</h2><p class="note" style="margin:0"><a href="#jobs">Jobs and Sage/Innergy names</a> &#183; <a href="#distances">Distances between jobs</a></p></div>';
+  h += '<div class="panel"><h2>Where the data lives</h2><p style="margin:0" class="note">Timecard files are read in your browser and never uploaded. Jobs, distances, settings, posted mileage legs and WIP entries are saved in CIM&#8217;s SharePoint (the Job Cost Data list) so the team shares one copy. Receipt photos go to the Job Cost Receipts folder.</p></div>';
+  return h;
+}
+
+/* ---------- installer phone ---------- */
+function installers(){ return Object.keys(S.settings.bases||{}).sort(); }
+function tripCalc(){
+  const t = S.t, base = (S.settings.bases||{})[t.who] || '', rate = Number(S.settings.rate)||0;
+  const jobs = t.stops.filter(Boolean); if (!jobs.length || !base) return null;
+  const stops = ['Base', ...jobs, 'Base']; const legs = []; let manual = false, missing = false;
+  for (let i = 0; i < stops.length - 1; i++) {
+    const a = stops[i], b = stops[i+1], charge = b !== 'Base' ? b : a, k = key(a,b) + '|' + i;
+    let mi = a === 'Base' ? baseMiles(b, base) : b === 'Base' ? baseMiles(a, base) : legMiles(a, b);
+    let src = 'table';
+    if (mi == null) { const m = num(t.manual[k]); if (m != null) { mi = m; src = 'installer'; manual = true; } else missing = true; }
+    legs.push({a, b, charge, mi, src, k, ext: 'MIL-' + initials(t.who) + '-' + t.date.replace(/-/g,'') + '-' + (i+1) + '-' + charge});
+  }
+  const mi = legs.reduce((s,l) => s + (l.mi||0), 0);
+  return {base, legs, mi, amt: mi * rate, rate, manual, missing};
+}
+function jobOptions(sel){
+  const list = Object.values(S.jobs).filter(j => j.sage && !String(j.sage).startsWith('?')).sort((a,b) => String(b.sage).localeCompare(String(a.sage)));
+  return '<option value="">Choose a job</option>' + list.map(j => '<option value="' + esc(j.sage) + '" ' + (sel === String(j.sage) ? 'selected' : '') + '>' + esc(j.sage + ' ' + (j.iname || j.tname || '')) + '</option>').join('');
+}
+function viewTrip(){
+  const t = S.t;
+  if (!t.date) { const d = new Date(); t.date = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+  if (t.sent) {
+    const x = t.sent;
+    return '<div class="panel stack"><h1>Sent</h1><div class="okmsg" style="margin:0">' + esc(x.miles + ' miles, ' + money(x.amount) + (x.park ? ' plus ' + money(x.park) + ' parking' : '') + ', is on the WIP schedule for ' + x.jobs) + '.</div>' +
+      '<p style="margin:0">' + (x.check ? 'You typed in a distance we did not have, so Tammy will check that leg before payroll.' : 'Every distance came from CIM&#8217;s mileage table, so Tammy only has to approve it for payroll.') + '</p>' +
+      '<button class="btn primary big" data-act="tnew">Log another day</button></div>' + myRecent();
+  }
+  const c = tripCalc(); const base = (S.settings.bases||{})[t.who] || '';
+  let h = '<h1>Log a trip</h1><p class="lede" style="margin-bottom:14px">Pick the jobs you drove to, in order. Miles come from CIM&#8217;s mileage table and go straight onto each job&#8217;s WIP.</p>';
+  h += '<div class="panel stack"><label>Who are you<select id="t-who"><option value="">Choose your name</option>' + installers().map(n => '<option ' + (t.who===n?'selected':'') + '>' + esc(n) + '</option>').join('') + '<option value="__new" ' + (t.who==='__new'?'selected':'') + '>My name isn\u2019t listed</option></select></label>';
+  if (t.who === '__new') h += '<div class="stack"><label>Your name (first and last, as on your timecard)<input id="t-newname" autocomplete="name"></label><label>Where you start your day<select id="t-newbase"><option value="">Choose</option><option>Colorado Springs</option><option>Englewood</option></select></label><button class="btn primary" style="min-height:48px" data-act="tme">Add me</button></div>';
+  else if (t.who && !base) h += '<div class="stack"><p class="errmsg" style="margin:0">Pick where you start your day so we can count miles from there.</p><select id="t-mybase"><option value="">Choose</option><option>Colorado Springs</option><option>Englewood</option></select></div>';
+  h += '<label>Date<input type="date" id="t-date" value="' + esc(t.date) + '"></label>' + (t.who && tripFor(t.who, t.date.replace(/-/g,'')) ? '<p class="note" style="margin:0">You already sent this day. Sending again replaces it.</p>' : '') + '</div>';
+  h += '<div class="panel stack"><h2 style="margin:0">Jobs, in the order you drove</h2>';
+  t.stops.forEach((v,i) => { h += '<div class="row" style="flex-wrap:nowrap"><label style="flex:1">Job ' + (i+1) + '<select data-tstop="' + i + '">' + jobOptions(v) + '</select></label>' + (t.stops.length > 1 ? '<button class="btn" style="min-height:48px;align-self:flex-end" aria-label="Remove job ' + (i+1) + '" data-act="tdel" data-i="' + i + '">&#215;</button>' : '') + '</div>'; });
+  h += '<button class="btn" data-act="tadd" style="min-height:48px">+ Add another job</button></div>';
+  if (c) {
+    h += '<div class="panel"><h2>Your route</h2>';
+    c.legs.forEach(l => {
+      const nm = x => x === 'Base' ? base : x + ' ' + jobName(x);
+      h += '<div class="leg"><span>' + esc(nm(l.a)) + ' &#8594; ' + esc(nm(l.b)) + '</span>' + (l.mi != null && l.src === 'table' ? '<b>' + l.mi + ' mi</b>' : '<input class="cell" style="width:90px;min-height:44px" inputmode="decimal" aria-label="Miles for this leg" placeholder="miles" data-tman="' + esc(l.k) + '" value="' + esc(t.manual[l.k] ?? '') + '">') + '</div>';
+    });
+    h += '<div class="leg" style="border:0;font-size:17px"><span>Total</span><b>' + c.mi + ' mi &nbsp; ' + money(c.amt) + '</b></div>';
+    if (c.missing || c.manual) h += '<p class="note" style="margin:6px 0 0">We don&#8217;t have one of these distances yet. Type the miles from your odometer or maps; Tammy checks it once and it&#8217;s saved for everyone.</p>';
+    h += '</div>';
+  }
+  h += '<div class="panel stack"><h2 style="margin:0">Parking (optional)</h2><label>Amount<input id="t-park" inputmode="decimal" placeholder="0.00" value="' + esc(t.park) + '"></label>' +
+       '<label>Receipt photo<input type="file" id="t-photo" accept="image/*" capture="environment"></label>' + (t.photoName ? '<p class="note" style="margin:0">Attached: ' + esc(t.photoName) + '</p>' : '') + '</div>';
+  const ok = c && !c.missing && t.who && t.who !== '__new';
+  h += '<button class="btn primary big" data-act="tsend" ' + (ok && !t.busy && S.canWrite ? '' : 'disabled') + '>' + (t.busy ? 'Sending&#8230;' : 'Send to the WIP schedule') + '</button>';
+  if (!S.canWrite) h += '<p class="note">Your account can only view the pilot, so trips cannot be sent. Ask IT for edit access to the Job Cost list.</p>';
+  return h + myRecent() + '<p class="note" style="text-align:center;margin-top:22px"><a href="#start" data-act="role" data-r="start">Not an installer? Go to the start page</a></p>';
+}
+function myRecent(){
+  if (!S.t.who) return '';
+  const mine = Object.values(S.trips).filter(x => x.who === S.t.who).sort((a,b) => b.date.localeCompare(a.date)).slice(0,6);
+  if (!mine.length) return '';
+  const lab = {posted:'On WIP, waiting for Tammy', check:'Tammy is checking a distance', approved:'Approved for payroll', rejected:'Sent back: see Tammy'};
+  return '<div class="panel"><h2>Your recent days</h2>' + mine.map(x => '<div class="leg"><span>' + esc(dayName(ymdToDate(x.date))) + ': ' + esc(x.stops.join(', ')) + '<br><span class="note">' + esc(lab[x.status]||x.status) + '</span></span><b>' + money(Number(x.amount)||0) + '</b></div>').join('') + '</div>';
+}
+async function sendTrip(){
+  const t = S.t, c = tripCalc(); if (!c || c.missing) return;
+  const ds = t.date.replace(/-/g,''), id = docId('TRIP-' + initials(t.who) + '-' + ds);
+    t.busy = true; render();
+  if (S.trips[id]) await removeTripPostings(S.trips[id]);
+  let photo = '';
+  if (t.photo) { try { const a = S.conn && S.conn.assets; if (a) { const up = await a.upload(t.photo); photo = up.id; } } catch(e) {} }
+  const wk = ymd(monday(ymdToDate(ds)));
+  const check = c.manual;
+  const legs = c.legs.map(l => ({a:l.a, b:l.b, charge:l.charge, mi:l.mi, src:l.src, ext:l.ext}));
+  const pk = num(t.park) || 0;
+  const ok = await save('trips/' + id, {who:t.who, date:ds, week:wk, base:c.base, stops:t.stops.filter(Boolean), legs, miles:c.mi, amount:+c.amt.toFixed(2), rate:c.rate, status: check ? 'check' : 'posted', park: pk, photo, sentAt: new Date().toISOString()}, false);
+  if (ok) for (const l of c.legs) await save('mileage/' + docId(l.ext), {who:t.who, date:ds, week:wk, from:l.a, to:l.b, sage:l.charge, miles:l.mi, amount:+(l.mi * c.rate).toFixed(2), rate:c.rate, trip:id, src:l.src}, false);
+  if (ok && pk > 0) { const last = t.stops.filter(Boolean).slice(-1)[0]; await save('parking/' + docId('PK-' + id), {who:t.who, sage:last, amt:pk, week:wk, posted:true, trip:id, photo}, false); }
+  t.busy = false;
+  if (ok) { t.sent = {miles:c.mi, amount:c.amt, park:pk, jobs:t.stops.filter(Boolean).join(', '), check}; try { localStorage.setItem('cimInstaller', t.who); } catch(e) {} }
+  render();
+}
+async function removeTripPostings(tr){
+  for (const l of (tr.legs||[])) await del('mileage/' + docId(l.ext));
+  const tid = Object.keys(S.trips).find(k => S.trips[k] === tr); const pid = Object.keys(S.parking).find(k => S.parking[k].trip === tid); if (pid) await del('parking/' + pid);
+}
+function phonePanel(){
+  const ws = weekStart(); const list = Object.entries(S.trips).filter(([id,t]) => inWeek(t.date)).sort((a,b) => (a[1].who + a[1].date).localeCompare(b[1].who + b[1].date));
+  const prev = new Date(ws); prev.setDate(prev.getDate()-7); const next = new Date(ws); next.setDate(next.getDate()+7);
+  let h = '<div class="panel"><div class="row" style="margin-bottom:8px"><h2 style="margin:0">Sent from installers&#8217; phones</h2><span class="spacer"></span>' +
+    (S.week ? '' : '<button class="btn small" data-act="wk" data-d="' + ymd(prev) + '">&#8592; Prior week</button><span class="note">Week of ' + esc(mdy(ws)) + '</span><button class="btn small" data-act="wk" data-d="' + ymd(next) + '">Next week &#8594;</button>') + '</div>';
+  if (!list.length) return h + '<p class="note" style="margin:0">No trips sent this week yet. Installers send them from the <a href="#trip">Log a trip</a> page on their phone.</p></div>';
+  const ready = list.filter(([id,t]) => t.status === 'posted');
+  if (ready.length) h += '<div class="row" style="margin-bottom:8px"><button class="btn primary" data-act="tokall" data-ids="' + esc(ready.map(x=>x[0]).join(',')) + '">Approve all ' + ready.length + ' that match the mileage table</button><span class="note">Trips with a typed-in distance stay for you to check.</span></div>';
+  h += '<p class="note" style="margin-top:0">These are already on the WIP schedule. Approving adds them to the bank file; sending one back takes it off the WIP.</p><div class="scroll"><table><thead><tr><th>Installer</th><th>Day</th><th>Route</th><th class="num">Miles</th><th class="num">Amount</th><th class="num">Parking</th><th>Timecard</th><th>Status</th><th></th></tr></thead><tbody>';
+  list.forEach(([id,t]) => {
+    let tc = '<span class="note">load timecards to compare</span>';
+    if (S.week) { const d = S.week.days.find(x => x.who === t.who && ymd(x.date) === t.date); tc = !d ? '<span class="chip warn">no job time</span>' : d.stops.join('>') === t.stops.join('>') ? '<span class="chip ok">matches</span>' : '<span class="chip warn">timecard: ' + esc(d.stops.join(' → ')) + '</span>'; }
+    const manualLegs = (t.legs||[]).filter(l => l.src === 'installer');
+    const st = {posted:'<span class="chip">On WIP</span>', check:'<span class="chip warn">Check distance</span>', approved:'<span class="chip ok">Approved</span>', rejected:'<span class="chip">Sent back</span>'}[t.status] || esc(t.status);
+    const photo = t.photo ? ' <a href="' + esc(/^https:\/\//.test(t.photo) ? t.photo : '#') + '" target="_blank" rel="noopener">receipt</a>' : '';
+    h += '<tr class="' + (t.status==='check'?'flag':'') + '"><td>' + esc(t.who) + '</td><td style="white-space:nowrap">' + esc(dayName(ymdToDate(t.date))) + '</td><td>' + esc(['Base', ...t.stops, 'Base'].join(' → ')) +
+      (manualLegs.length ? '<br><span class="note">Typed by installer: ' + manualLegs.map(l => esc(l.a + '→' + l.b + ' ' + l.mi + ' mi')).join(', ') + '</span>' : '') + '</td><td class="num">' + esc(t.miles) + '</td><td class="num">' + money(Number(t.amount)||0) + '</td><td class="num">' + (t.park ? money(t.park) + photo : '') + '</td><td>' + tc + '</td><td>' + st + '</td><td style="white-space:nowrap">' +
+      (t.status==='posted' ? '<button class="btn small primary" data-act="tok" data-id="' + esc(id) + '">Approve</button> ' : '') +
+      (t.status==='check' ? '<button class="btn small primary" data-act="tok" data-id="' + esc(id) + '" data-save="1">Distance OK, approve</button> ' : '') +
+      (t.status!=='rejected' ? '<button class="btn small" data-act="tno" data-id="' + esc(id) + '">Send back</button>' : '') + '</td></tr>';
+  });
+  return h + '</tbody></table></div></div>';
+}
+
+/* ---------- events ---------- */
+function bind(r){
+  const drop = $('#drop');
+  if (drop) {
+    const pick = () => $('#file').click();
+    drop.onclick = pick; drop.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } };
+    drop.ondragover = e => { e.preventDefault(); drop.classList.add('over'); }; drop.ondragleave = () => drop.classList.remove('over');
+    drop.ondrop = e => { e.preventDefault(); drop.classList.remove('over'); const f = e.dataTransfer.files[0]; if (f) readFile(f); };
+  }
+  const rl = $('#reload'); if (rl) rl.onclick = () => $('#file').click();
+  document.querySelectorAll('[data-appr]').forEach(c => c.onchange = () => { S.approved[c.dataset.appr] = c.checked; S.msg=''; render(); });
+  document.querySelectorAll('[data-wip]').forEach(i => i.onchange = () => { const v = i.value.trim(); save('wip/' + docId(i.dataset.wip), {[i.dataset.k]: v === '' ? '' : (num(v) ?? v)}); });
+  document.querySelectorAll('[data-job]').forEach(i => i.onchange = () => { let v = i.value.trim(); if (['cos','eng'].includes(i.dataset.k)) v = v === '' ? '' : (num(v) ?? ''); save('jobs/' + docId(i.dataset.job), {[i.dataset.k]: v}); });
+  document.querySelectorAll('[data-legedit]').forEach(i => i.onchange = () => save('legs/' + i.dataset.legedit, {miles: num(i.value) ?? ''}));
+  document.querySelectorAll('[data-setbase]').forEach(s => s.onchange = () => { const b = Object.assign({}, S.settings.bases||{}); b[s.dataset.setbase] = s.value; save('config/settings', {bases:b}); });
+  const jq = $('#jobq'); if (jq) jq.oninput = () => { S.jobFilter = jq.value; const pos = jq.selectionStart; render(); const n = $('#jobq'); n.focus(); n.setSelectionRange(pos,pos); };
+  ['pkWho','pkJob','pkAmt'].forEach(id => { const el = $('#'+id); if (el) el.onchange = () => { S.pk[{pkWho:'who',pkJob:'job',pkAmt:'amt'}[id]] = el.value; }; });
+  const tw = $('#t-who'); if (tw) tw.onchange = () => { S.t.who = tw.value; if (tw.value && tw.value !== '__new') { try { localStorage.setItem('cimInstaller', tw.value); } catch(e) {} } render(); };
+  const mb = $('#t-mybase'); if (mb) mb.onchange = async () => { if (!mb.value) return; const bs = Object.assign({}, S.settings.bases||{}); bs[S.t.who] = mb.value; await save('config/settings', {bases:bs}); render(); };
+  const td = $('#t-date'); if (td) td.onchange = () => { S.t.date = td.value; render(); };
+  document.querySelectorAll('[data-tstop]').forEach(x => x.onchange = () => { S.t.stops[+x.dataset.tstop] = x.value; render(); });
+  document.querySelectorAll('[data-tman]').forEach(x => x.onchange = () => { S.t.manual[x.dataset.tman] = x.value; render(); });
+  const tp = $('#t-park'); if (tp) tp.onchange = () => { S.t.park = tp.value; };
+  const tf = $('#t-photo'); if (tf) tf.onchange = () => { const f = tf.files[0]; if (f) { S.t.photo = f; S.t.photoName = f.name; render(); } };
+  const it = $('#impType'); if (it) it.onchange = () => { S.impType = it.value; };
+  const idrop = $('#impdrop');
+  if (idrop) { const pick = () => $('#impfile').click(); idrop.onclick = pick; idrop.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } };
+    idrop.ondragover = e => { e.preventDefault(); idrop.classList.add('over'); }; idrop.ondragleave = () => idrop.classList.remove('over');
+    idrop.ondrop = e => { e.preventDefault(); idrop.classList.remove('over'); const f = e.dataTransfer.files[0]; if (f) readImport(f); }; }
+  document.querySelectorAll('[data-map]').forEach(x => x.onchange = () => { S.imp.map[x.dataset.map] = +x.value; render(); });
+  document.querySelectorAll('[data-assign]').forEach(x => x.onchange = async () => { const j = findJob(x.value); if (!j) return; const raw = x.dataset.assign.toLowerCase().trim();
+    const isNum = /^[A-Za-z0-9-]+$/.test(raw) && /\d/.test(raw);
+    await save('jobs/' + docId(j.sage), isNum ? {alias: [j.alias, x.dataset.assign].filter(Boolean).join(', ')} : {aka: [...(j.aka||[]), raw]}); S.msg = '"' + x.dataset.assign + '" now means job ' + j.sage + '.'; render(); });
+  document.querySelectorAll('[data-line]').forEach(x => x.onchange = () => { const [sg, ln] = x.dataset.line.split('|'); const v = x.value.trim();
+    save('lines/' + docId(sg + '__' + ln), {sage:sg, line:ln, [x.dataset.k]: x.dataset.k === 'note' ? v : (v === '' ? '' : (num(v) ?? ''))}); });
+  document.querySelectorAll('[data-cross]').forEach(x => x.onchange = () => { const [sg, ln] = x.dataset.cross.split('|'); save('lines/' + docId(sg + '__' + ln), {sage:sg, line:ln, crossed:x.checked}); });
+  document.querySelectorAll('[data-cc]').forEach(x => x.onchange = () => { const m = Object.assign({}, S.settings.ccmap||{}); m[x.dataset.cc] = x.value.trim(); save('config/settings', {ccmap:m}); });
+  document.querySelectorAll('[data-act]').forEach(b => b.onclick = () => act(b.dataset.act, b));
+}
+function readImport(f){ const fr = new FileReader(); fr.onload = () => loadImport(new Uint8Array(fr.result), f.name); fr.onerror = () => { S.err = 'The file could not be opened.'; render(); }; fr.readAsArrayBuffer(f); }
+$('#impfile').onchange = e => { const f = e.target.files[0]; if (f) readImport(f); e.target.value=''; };
+function readFile(f){ const fr = new FileReader(); fr.onload = () => loadWorkbook(new Uint8Array(fr.result), f.name); fr.onerror = () => { S.err = 'The file could not be opened.'; render(); }; fr.readAsArrayBuffer(f); }
+$('#file').onchange = e => { const f = e.target.files[0]; if (f) readFile(f); e.target.value=''; };
+async function act(a, b){
+  S.msg=''; S.err='';
+  const W = computeWeek();
+  if (a === 'signin') return S.gate && S.gate.signIn && S.gate.signIn();
+  if (a === 'setupfile') { const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.json,application/json'; inp.onchange = () => { if (inp.files[0]) loadSetup(inp.files[0]); }; inp.click(); return; }
+  if (a === 'setbase') { const v = document.querySelector('[data-base-who="' + CSS.escape(b.dataset.who) + '"]').value; if (!v) return; const bs = Object.assign({}, S.settings.bases||{}); bs[b.dataset.who] = v; await save('config/settings', {bases:bs}); }
+  if (a === 'addjob') { const s = b.dataset.sage; const t = (S.week.tcJobs||{})[s] || {}; const cos = num(document.querySelector('[data-j-cos="'+CSS.escape(s)+'"]').value), eng = num(document.querySelector('[data-j-eng="'+CSS.escape(s)+'"]').value);
+    await save('jobs/' + docId(s), {sage:s, short: /^26\d{4}$/.test(s) ? s.slice(2) : '', proj:t.proj||'', alias:'', iname:t.pname||'', tname:'', cos: cos ?? '', eng: eng ?? '', how:'Added from an Innergy timecard', status:'Confirmed'}, false); S.msg = 'Job ' + s + ' added to the crosswalk.'; }
+  if (a === 'savebm') { const [s, base] = b.dataset.k.split('|'); const v = num(document.querySelector('[data-bm="'+CSS.escape(b.dataset.k)+'"]').value); if (v == null) { S.err = 'Enter the miles as a number.'; return render(); } const j = findJob(s); await save('jobs/' + docId(j ? j.sage : s), {[base === 'Englewood' ? 'eng' : 'cos']: v}); }
+  if (a === 'saveleg') { const k = key(b.dataset.a, b.dataset.b); const v = num(document.querySelector('[data-leg="'+CSS.escape(k)+'"]').value); if (v == null) { S.err = 'Enter the miles as a number.'; return render(); } await save('legs/' + docId(k), {a:b.dataset.a, b:b.dataset.b, miles:v, note:'Entered from the week of ' + mdy(S.week.start)}, false); }
+  if (a === 'apprall') { W.days.filter(d => d.ready && !d.fromPhone).forEach(d => S.approved[d.id] = true); }
+  if (a === 'addpk') { const who = $('#pkWho').value, job = $('#pkJob').value, amt = num($('#pkAmt').value); S.pk = {who, job, amt: $('#pkAmt').value};
+    if (!who || !job || !(amt > 0)) { S.err = 'Choose the installer and job, and enter the amount.'; return render(); }
+    const id = docId('PK-' + initials(who) + '-' + ymd(S.week.start) + '-' + job + '-' + Date.now());
+    if (await save('parking/' + id, {who, sage:job, amt, week: ymd(S.week.start), posted:true}, false)) { S.pk = {who:'',job:'',amt:''}; S.msg = 'Parking added and posted to job ' + job + '.'; } }
+  if (a === 'delpk') await del('parking/' + b.dataset.id);
+  if (a === 'bank') return download('Mileage bank file ' + ymd(weekStart()) + '.csv', bankFile(W));
+  if (a === 'sage') return download('Mileage Sage lines ' + ymd(weekStart()) + '.csv', sageFile(W));
+  if (a === 'innergy') return download('Mileage Innergy upload ' + ymd(weekStart()) + '.xlsx', innergyFile(W));
+  if (a === 'post') return postToWip(W);
+  if (a === 'sel') { S.sel = b.dataset.sage || null; if (S.sel) { render(); const d = $('#detail'); if (d && d.scrollIntoView) d.scrollIntoView({behavior:'smooth', block:'start'}); return; } }
+  if (a === 'role') { const r = b.dataset.r; try { if (r === 'start') localStorage.removeItem('cimRole'); else localStorage.setItem('cimRole', r); } catch(e) {} location.hash = r; return; }
+  if (a === 'copyurl') { const u = $('#share-url'); try { await navigator.clipboard.writeText(u.value); S.msg = 'Link copied.'; } catch(e) { u.select(); S.msg = 'Select the link and copy it.'; } }
+  if (a === 'tme') { const n = ($('#t-newname').value||'').trim().replace(/\s+/g,' '), bs0 = $('#t-newbase').value; if (!n || !bs0) { S.err = 'Type your name and pick where you start your day.'; return render(); }
+    const bs = Object.assign({}, S.settings.bases||{}); bs[n] = bs0; if (!(await save('config/settings', {bases:bs}))) return; S.t.who = n; try { localStorage.setItem('cimInstaller', n); localStorage.setItem('cimRole', 'trip'); } catch(e) {} S.msg = 'You\u2019re added, ' + n.split(' ')[0] + '.'; }
+  if (a === 'addinst') { const n = ($('#ni-name').value||'').trim().replace(/\s+/g,' '), bs0 = $('#ni-base').value; if (!n || !bs0) { S.err = 'Type a name and pick a home base.'; return render(); } const bs = Object.assign({}, S.settings.bases||{}); bs[n] = bs0; await save('config/settings', {bases:bs}); S.msg = n + ' added.'; }
+  if (a === 'tokall') { const ids = b.dataset.ids.split(',').filter(Boolean); for (const id of ids) await save('trips/' + id, {status:'approved'}); S.msg = ids.length + ' trips approved for payroll.'; }
+  if (a === 'savepurl') { const u = ($('#purl').value||'').trim().replace(/#.*$/,''); if (u && !/^https:\/\//.test(u)) { S.err = 'Paste the https:// link for this pilot.'; return render(); } await save('config/settings', {pilotUrl:u}); S.msg = 'Pilot link saved.'; }
+  if (a === 'tadd') S.t.stops.push('');
+  if (a === 'tdel') S.t.stops.splice(+b.dataset.i, 1);
+  if (a === 'tsend') return sendTrip();
+  if (a === 'tnew') { S.t = {who:S.t.who, date:'', stops:['',''], manual:{}, park:'', photo:null, photoName:'', sent:null, busy:false}; }
+  if (a === 'wk') S.wkPick = ymdToDate(b.dataset.d);
+  if (a === 'tok') { const tr = S.trips[b.dataset.id];
+    if (b.dataset.save) for (const l of tr.legs.filter(l => l.src === 'installer')) {
+      if (l.a === 'Base' || l.b === 'Base') { const j = findJob(l.a === 'Base' ? l.b : l.a); if (j) await save('jobs/' + docId(j.sage), {[tr.base === 'Englewood' ? 'eng' : 'cos']: l.mi}); }
+      else await save('legs/' + docId(key(l.a,l.b)), {a:l.a, b:l.b, miles:l.mi, note:'From ' + tr.who + ' phone, ' + mdy(ymdToDate(tr.date)) + ', checked by Tammy'}, false); }
+    await save('trips/' + b.dataset.id, {status:'approved'}); S.msg = 'Approved for payroll.'; }
+  if (a === 'tno') { const tr = S.trips[b.dataset.id]; await removeTripPostings(tr); await save('trips/' + b.dataset.id, {status:'rejected'}); S.msg = 'Sent back and removed from the WIP schedule.'; }
+  if (a === 'addwip') { const s = $('#addWip').value.trim(); if (!s) return; const sg = resolveJob(s); if (!sg) { S.err = 'Job ' + esc(s) + ' is not in the Jobs list yet. Add it there first.'; return render(); } await save('wip/' + docId(sg), {added:true}); S.sel = sg; }
+  if (a === 'wipf') S.wipFilter = b.dataset.f;
+  if (a === 'addline') { const ln = $('#nl-line').value.trim(), bd = num($('#nl-budget').value); if (!ln) { S.err = 'Name the budget line.'; return render(); } await save('lines/' + docId(b.dataset.sage + '__' + ln), {sage:b.dataset.sage, line:ln, budget: bd ?? ''}); }
+  if (a === 'review') { const r = wipRow(b.dataset.sage); await save('reviews/' + docId(curMonth() + '__' + r.sage), {sage:r.sage, month:curMonth(), by:S.me||'', at:new Date().toISOString(), note:($('#rv-note')||{}).value||'', est:+r.est.toFixed(2), pct:r.pct}, false); S.msg = r.sage + ' marked reviewed.'; }
+  if (a === 'unreview') await del('reviews/' + docId(curMonth() + '__' + b.dataset.sage));
+  if (a === 'lock') return lockClose();
+  if (a === 'reopen') { const m = b.dataset.m; await save('config/settings', {openMonth: m}); await del('closes/' + m); S.msg = monthName(m) + ' is open again.'; }
+  if (a === 'impgo') return commitImport();
+  if (a === 'impcancel') S.imp = null;
+  if (a === 'impdel') { await save('imports/' + b.dataset.id, {removed:true}); S.msg = 'Import removed; its rows are off the WIP schedule.'; }
+  if (a === 'impundo') await save('imports/' + b.dataset.id, {removed:false});
+  if (a === 'addcc') { const k = $('#cc-new').value.trim(), v = $('#cc-line').value.trim(); if (!k || !v) { S.err = 'Enter the cost code and budget line.'; return render(); } const m = Object.assign({}, S.settings.ccmap||{}); m[k] = v; await save('config/settings', {ccmap:m}); }
+  if (a === 'wipxlsx') { const rows = wipIds().map(wipRow);
+    const head = ['Sage job #','Innergy project','Job','Contract','Billed','Innergy costs','Sage-only costs','Mileage & parking','Cost to date','Cost to complete','Est. total cost','% complete','Earned','Over/(under) billed','Gross profit','Margin','Last close est.','Change','Flag','Reviewed by','Review note'];
+    const sheet1 = [head, ...rows.map(r => [r.sage, r.proj, r.name, r.contract, r.billed, +r.inn.toFixed(2), +r.sg.toFixed(2), +(r.ml.m + r.ml.p).toFixed(2), +r.ctd.toFixed(2), +r.ctc.toFixed(2), +r.est.toFixed(2), r.pct, r.earned, r.over, r.gp, r.margin, r.last, r.chg, r.flags.join('; '), r.rv ? nameOf(r.rv.by) : '', r.rv ? r.rv.note || '' : ''])];
+    const sheet2 = [['Sage job #','Budget line','Budget','Cost to date','Open POs','Budget left','Cost to complete','Crossed off','Note'], ...rows.flatMap(r => r.lines.map(l => [r.sage, l.line, l.budget, +l.ctd.toFixed(2), l.openpo, +l.left.toFixed(2), +l.ctc.toFixed(2), l.crossed ? 'Yes' : '', l.note]))];
+    const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sheet1), 'WIP'); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sheet2), 'Budget lines');
+    return download('WIP schedule ' + curMonth() + '.xlsx', new Blob([XLSX.write(wb,{bookType:'xlsx',type:'array'})])); }
+  if (a === 'newjob') { const s = $('#nj-sage').value.trim(); if (!s) { S.err = 'Enter the Sage job #.'; return render(); }
+    await save('jobs/' + docId(s), {sage:s, short: /^26\d{4}$/.test(s) ? s.slice(2) : '', proj:$('#nj-proj').value.trim(), alias:'', iname:$('#nj-name').value.trim(), tname:'', cos: num($('#nj-cos').value) ?? '', eng: num($('#nj-eng').value) ?? '', how:'Added by hand', status:'Added'}, false); S.msg = 'Job ' + s + ' added.'; }
+  if (a === 'newleg') { const x = $('#nl-a').value.trim(), y = $('#nl-b').value.trim(), v = num($('#nl-mi').value); if (!x || !y || v == null) { S.err = 'Enter both job numbers and the miles.'; return render(); }
+    await save('legs/' + docId(key(x,y)), {a:x, b:y, miles:v, note:'Added by hand'}, false); S.msg = 'Distance saved.'; }
+  if (a === 'delleg') await del('legs/' + b.dataset.id);
+  if (a === 'saverate') { const v = num($('#rate').value); if (v == null) { S.err = 'Enter the rate as a number, like 0.58.'; return render(); } await save('config/settings', {rate:v}); S.msg = 'Rate saved.'; }
+  if (a === 'saveflags') { const c = num($('#lateCut').value), m = num($('#lateAmt').value), jp = num($('#jumpPts').value); if (c == null || m == null || jp == null) { S.err = 'Enter all three numbers.'; return render(); } await save('config/settings', {lateCut: c/100, lateAmt: m, jumpPts: jp}); S.msg = 'Flags saved.'; }
+  render();
+}
+window.addEventListener('hashchange', () => { S.msg=''; S.err=''; render(); });
+render(); initDb();
+</script>
+</body>
+</html>
