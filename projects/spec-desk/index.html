@@ -927,6 +927,7 @@ async function summarizeSection(s, opt = {}) {
   const sum = { points: [], chunks: chunks.length, running: 'Starting…' };
   state.summaries.set(s.key, sum);
   sumCtl = new AbortController();
+  if (opt.signal) { if (opt.signal.aborted) sumCtl.abort(); else opt.signal.addEventListener('abort', () => sumCtl.abort(), { once: true }); }
   const draw = () => { if (state.current === s.key && state.tab === 'section') { $('#sumBox').innerHTML = renderSummary(sum); const st = $('#btnStopSum'); if (st) st.onclick = () => sumCtl.abort(); } };
   draw();
   try {
@@ -1325,12 +1326,13 @@ ${blocks}`, { signal, modelTier: 'default' });
         else { it.chk = { status: 'confirmed', n, note: c.note || 'Read both sides again and confirmed.' }; if (prev) changed++; }
         confirmed++; continue;
       }
-      const backed = ST_LABEL[st] && st !== 'extra' && (st === 'gap' || cmpQuoteOk(c.other) || (!c.other && cmpQuoteOk(it.other)));
+      // every finding here has a quote that was found in the document, so a "gap" with no evidence can't overturn it
+      const backed = ST_LABEL[st] && st !== 'extra' && st !== 'gap' && (cmpQuoteOk(c.other) || (!c.other && cmpQuoteOk(it.other)));
       if (backed && !(prev && prev.status === 'corrected')) {
         it.chk = { status: 'corrected', n, was: ST_LABEL[it.status] + (it.note ? ': ' + it.note : ''), note: c.note || '' };
         it.status = st; if (st === 'gap') it.other = null; else if (c.other) it.other = c.other; if (c.note) it.note = c.note; changed++;
       } else {
-        it.chk = { status: 'disputed', n, was: prev && prev.was, note: `A second reading says “${ST_LABEL[st] || st || '?'}”${backed ? ' after it was already corrected once' : ', but its quote couldn’t be found in the ' + kind}. ${c.note || ''} Check by hand.` };
+        it.chk = { status: 'disputed', n, was: prev && prev.was, note: `A second reading says “${ST_LABEL[st] || st || '?'}”${backed ? ' after it was already corrected once' : st === 'gap' ? ', but the quote above was found in the ' + kind : ', but its quote couldn’t be found in the ' + kind}. ${c.note || ''} Check by hand.` };
         if (!prev || prev.status !== 'disputed') changed++;
       }
     }
@@ -1674,7 +1676,7 @@ async function runSplitBySize(which, btn) {
   const label = btn.textContent; btn.disabled = true;
   const limit = +(which === 'spec' ? $('#splitMb') : $('#dwgSplitMb')).value * 1048576;
   const say = t => { btn.textContent = t; };
-  const tell = h => { if (which === 'spec') alertBar(h); else $('#dwgStatus').innerHTML = h; };
+  const tell = (t, bad) => { if (which === 'spec') { if (bad) alertBar(t); else $('#fileInfo').textContent = t; } else $('#dwgStatus').innerHTML = bad ? `<span class="err">${esc(t)}</span>` : esc(t); };
   try {
     let src, units, base;
     if (which === 'spec') { say('Reading the PDF…'); src = await getSrcPdf(); units = specUnits(); base = safeName(state.fileName.replace(/\.pdf$/i, '')); }
@@ -1683,8 +1685,8 @@ async function runSplitBySize(which, btn) {
     const blob = await zipBlob(zip, p => say(`Packing the ZIP… ${Math.round(p)}%`));
     await saveFile(`${base} - parts under ${limit / 1048576} MB.zip`, blob);
     const msg = `Split into ${plural(parts.length, 'part')} under ${limit / 1048576} MB (largest ${mb(Math.max(...parts.map(p => p.bytes.length)))}), keeping ${which === 'spec' ? 'each section' : 'each sheet'} whole${notes.length ? ' where it fits. ' + notes.join(' ') : '.'}`;
-    if (which === 'spec') { const f = $('#fileInfo'); f.textContent = msg; } else tell(esc(msg));
-  } catch (e) { tell(`Couldn’t split the PDF: ${esc(e.message || e)}`); }
+    tell(msg);
+  } catch (e) { tell(`Couldn’t split the PDF: ${e.message || e}`, true); }
   btn.disabled = false; btn.textContent = label;
 }
 
@@ -2337,7 +2339,8 @@ function resetWorkspace() {
   closePreview();
   for (const s of state.dwg.sets) if (s.doc) try { s.doc.destroy(); } catch {}
   Object.assign(state, { fileName: '', bytes: null, specBlob: null, pages: [], sections: [], secMap: new Map(), pageMap: [], records: [], index: null, current: null,
-    other: null, cmpItems: [], cmpFilter: 'all', pdfLibDoc: null, askScope: '', picked: new Set(), decisions: {}, issueFilter: 'open', reviews: [] });
+    other: null, cmpItems: [], cmpFilter: 'all', pdfLibDoc: null, askScope: '', picked: new Set(), decisions: {}, issueFilter: 'open', reviews: [],
+    cmpCheck: null, cmpSecs: [], cmpTried: new Set(), reRefsChk: {}, ask: null });
   rv.shop = { sid: null, n: null, region: null }; rv.arch = { sid: null, n: null, region: null }; rv.specKeys = null;
   if (state._specDoc) { try { state._specDoc.destroy(); } catch {} } state._specDoc = null;
   state.rs = { rows: [], done: {}, sheetNotes: {} }; state.checks = {}; state.reRefs = {}; state.issueSource = ''; state.deep = { log: [], xrefs: [], running: false }; dp.keys = null; rsUi.picked = new Set(); rp.keys = null;
@@ -3158,13 +3161,18 @@ SHEET TEXT`), { signal, modelTier: 'default', images: ctx.imgs.length ? ctx.imgs
         confirmed++; continue;
       }
       const fix = c.verdict === 'wrong' && c.fix && typeof c.fix === 'object' ? Object.entries(c.fix).map(([j, v]) => [RS_FROM_JSON[j] || (RS_LABEL[j] ? j : null), String(v ?? '').trim()]).filter(([f, v]) => f && v && normV(v) !== normV(r.f[f])) : [];
-      const okFix = !noText && fix.length && fix.every(([, v]) => textOnPage(set, n, v)) && !(prev && prev.status === 'corrected');
+      const evid = (Array.isArray(c.evidence) ? c.evidence : []).map(String).filter(e => e.trim().length >= 2 && textOnPage(set, n, e));
+      // a bare number ("2", "24") matches detail tags and grid numbers anywhere, so it needs quoted evidence that contains it;
+      // a value with a unit or letters (24", 11'-11 1/2", PL-1) may also match a whole piece of sheet text
+      const bare = v => /^[\d.\/\s-]+$/.test(String(v).trim());
+      const onSheet = v => evid.some(e => normQ(e).includes(normQ(v)) && normQ(e) !== normQ(v)) || (!bare(v) && set.pages[n - 1].chunks.some(ch => normQ(ch.s) === normQ(v)));
+      const okFix = !noText && fix.length && fix.every(([, v]) => onSheet(v)) && !(prev && prev.status === 'corrected');
       if (okFix) {
         r.chk = { status: 'corrected', n: n2, was: fix.map(([f]) => `${RS_LABEL[f]} ${r.f[f] || '(blank)'}`).join(', '), note: c.note || '' };
         for (const [f, v] of fix) r.f[f] = v; changed++;
       } else {
         const why = c.verdict === 'not_on_sheet' ? 'A second reading didn’t find this item on the sheet.'
-          : fix.length ? `A second reading suggests ${fix.map(([f, v]) => `${RS_LABEL[f]} ${v}`).join(', ')}, ${noText ? 'but this sheet has no text to confirm it against' : prev && prev.status === 'corrected' ? 'after it was already corrected once' : 'but that value isn’t in the sheet’s text'}.`
+          : fix.length ? `A second reading suggests ${fix.map(([f, v]) => `${RS_LABEL[f]} ${v}`).join(', ')}, ${noText ? 'but this sheet has no text to confirm it against' : prev && prev.status === 'corrected' ? 'after it was already corrected once' : 'but no text on the sheet backs that value'}.`
           : 'A second reading didn’t confirm this row.';
         r.chk = { status: 'disputed', n: n2, was: prev && prev.was, note: why + (c.note ? ' ' + c.note : '') };
         if (!prev || prev.status !== 'disputed') changed++;
@@ -3319,11 +3327,12 @@ function estCols(est) {
 // Charges that aren't products (freight, tax, bonds…). A line is skipped only when it names one of these AND has no
 // item identifier. A $0 value is never a reason to skip: real products can be priced at $0.
 const NON_PRODUCT = /^(?:freight|shipping|delivery|crating|fuel surcharge|mobili[sz]ation|demobili[sz]ation|(?:performance |payment )?bonds?|permits?|(?:sales )?tax(?:es)?|insurance|overhead|profit|mark-?up|contingency|discount|escalation|general conditions|travel|per diem|lodging|sub-?total|grand total|total)\b/i;
+const PRODUCT_WORDS = /\b(?:cabinets?|casework|counters?|countertops?|desks?|shel(?:f|ves)|stations?|carts?|pedestals?|panels?|tops?|drawers?|doors?|cases?|benches?|tables?|vanit(?:y|ies)|lockers?|storage|millwork|trim|sills?|units?|islands?|racks?|bins?|windows?)\b/i;
 function estNonProduct(r, col) {
   const cell = k => (col[k] >= 0 ? String(r[col[k]] ?? '').trim() : '');
   if (cell('item') && !/^-?0(\.0+)?$|^\?$/.test(cell('item'))) return false;
   const name = cell('desc') || r.map(c => String(c ?? '').trim()).find(c => /[a-z]{3}/i.test(c)) || '';
-  return NON_PRODUCT.test(name);
+  return NON_PRODUCT.test(name) && !PRODUCT_WORDS.test(name);
 }
 function mvSourceRows() {
   if (state.mv.source === 'estimate') { const est = state.mv.estimate; if (!est) return []; const col = estCols(est); return est.rows.filter(r => !estNonProduct(r, col)); }
@@ -3558,11 +3567,11 @@ function renderRooms() {
     $('#rsXlsx').onclick = () => saveFile(projBase() + ' - room schedule.xlsx', xlsxBlob([['Room schedule', rsAoa()]]));
     $('#rsEstFile').onchange = async e => {
       const f = e.target.files[0]; e.target.value = ''; if (!f) return;
-      try { state.mv.estimate = await readTable(f); mvAutoMap(); const n = estimateToSchedule(); $('#rsStatus').textContent = `Added ${plural(n, 'line')} from ${f.name}, tab “${state.mv.estimate.sheet}”.${state.mv.estimate.skipped && state.mv.estimate.skipped.length ? ` Skipped ${plural(state.mv.estimate.skipped.length, 'non-product line')} (${esc(state.mv.estimate.skipped.join(', '))}).` : ''} To use a different tab or header row, change it under Send to Microvellum, then click “Reload lines from the open estimate”.`; }
+      try { state.mv.estimate = await readTable(f); mvAutoMap(); const n = estimateToSchedule(); $('#rsStatus').textContent = `Added ${plural(n, 'line')} from ${f.name}, tab “${state.mv.estimate.sheet}”.${state.mv.estimate.skipped && state.mv.estimate.skipped.length ? ` Skipped ${plural(state.mv.estimate.skipped.length, 'non-product line')} (${state.mv.estimate.skipped.join(', ')}).` : ''} To use a different tab or header row, change it under Send to Microvellum, then click “Reload lines from the open estimate”.`; }
       catch (err) { $('#rsStatus').innerHTML = `<span class="err">That file couldn’t be read: ${esc(err.message)}</span>`; }
       drawRsTable(); drawMv(); updateIssueCount(); scheduleWorkSave(); $('#rsFromEst').hidden = !state.mv.estimate;
     };
-    $('#rsFromEst').onclick = () => { const n = estimateToSchedule(); $('#rsStatus').textContent = `Reloaded ${plural(n, 'line')} from the estimate.${state.mv.estimate.skipped && state.mv.estimate.skipped.length ? ` Skipped ${plural(state.mv.estimate.skipped.length, 'non-product line')} (${esc(state.mv.estimate.skipped.join(', '))}).` : ''} Rows you edited or verified were kept.`; drawRsTable(); updateIssueCount(); scheduleWorkSave(); };
+    $('#rsFromEst').onclick = () => { const n = estimateToSchedule(); $('#rsStatus').textContent = `Reloaded ${plural(n, 'line')} from the estimate.${state.mv.estimate.skipped && state.mv.estimate.skipped.length ? ` Skipped ${plural(state.mv.estimate.skipped.length, 'non-product line')} (${state.mv.estimate.skipped.join(', ')}).` : ''} Rows you edited or verified were kept.`; drawRsTable(); updateIssueCount(); scheduleWorkSave(); };
     $('#rsCsv').onclick = () => saveFile(projBase() + ' - room schedule.csv', rsAoa().map(r => r.map(csvCell).join(',')).join('\r\n'));
     $('#rsTable').addEventListener('change', e => {
       const t = e.target;
@@ -4286,6 +4295,13 @@ function checkLogHtml(log, items) {
 
 // Check statements against the spec paragraphs they cite. A correction is only taken when the cited quotes are
 // really in the spec; a second correction of the same statement goes to a person instead.
+// a corrected statement may only bring in numbers (3/4, 100, 1-1/4…) that the cited paragraphs actually contain
+const numsIn = t => normQ(t).match(/\d+(?:[.\/]\d+)?/g) || [];
+function fixBacked(fix, p) {
+  const old = new Set(numsIn(p.statement));
+  const src = new Set(numsIn((p.citations || []).map(c => { const r = specResolver(c.ref); return r ? r.text : ''; }).join(' ')));
+  return numsIn(fix).filter(x => !old.has(x)).every(x => src.has(x));
+}
 async function verifyStatements(todo, round, signal, say) {
   let changed = 0, confirmed = 0, calls = 0;
   for (let i = 0; i < todo.length; i += 20) {
@@ -4312,7 +4328,7 @@ ${blocks}`, { signal, modelTier: 'default' });
         else { x.p.chk = { status: 'confirmed', n, note: c.note || '' }; if (prev) changed++; }
         confirmed++;
       }
-      else if (c.verdict === 'partly' && c.fix && quotesOk && !(prev && prev.status === 'corrected')) { x.p.chk = { status: 'corrected', n, was: x.p.statement, note: c.note || '' }; x.p.statement = c.fix; changed++; }
+      else if (c.verdict === 'partly' && c.fix && quotesOk && fixBacked(c.fix, x.p) && !(prev && prev.status === 'corrected')) { x.p.chk = { status: 'corrected', n, was: x.p.statement, note: c.note || '' }; x.p.statement = c.fix; changed++; }
       else { x.p.chk = { status: 'disputed', n, was: prev && prev.was, note: (c.note || '') + (quotesOk ? '' : ' The quoted words weren’t found in the spec.') + (c.verdict === 'partly' && c.fix ? ` Suggested correction: ${c.fix}` : '') }; if (!prev || prev.status !== 'disputed') changed++; }
     }
   }
@@ -4375,7 +4391,7 @@ async function passSpecHunt(round, signal, say) {
     let sum = state.summaries.get(s.key);
     if (!sum || !sum.points || sum.error) {
       say(`Reading ${s.num} ${s.title} for the first time`);
-      await summarizeSection(s, { noCheck: true }); calls++;   // the deep check verifies it in its own passes
+      await summarizeSection(s, { noCheck: true, signal }); calls++;   // the deep check verifies it in its own passes
       sum = state.summaries.get(s.key);
       if (!sum || sum.error) throw Object.assign(new Error('summary failed'), { code: 'error' });
       if (round > 1) for (const p of sum.points) p.round = round;
@@ -4399,8 +4415,9 @@ async function passVerify(round, signal, say) {
 
 /* pass 3: look again for anything the comparison called a gap or unclear */
 async function passCompare(round, signal, say) {
-  const todo = state.cmpItems.filter(it => it.status !== 'match' && (!it.chk || (it.chk.status !== 'confirmed' && it.chk.n < 2)) &&
-    (['gap', 'unclear'].includes(it.status) || (it.other && !(otherResolver(it.other.ref) && verifyQuote(it.other.quote, otherResolver(it.other.ref).text)))));
+  // gaps and unclear items, plus any match, conflict or exclusion whose quotes can't be found in the documents
+  const todo = state.cmpItems.filter(it => it.status !== 'extra' && (!it.chk || (it.chk.status !== 'confirmed' && it.chk.n < 2)) &&
+    (['gap', 'unclear'].includes(it.status) || !cmpQuoteOk(it.other) || !cmpSpecOk(it.spec)));
   let changed = 0, confirmed = 0, calls = 0;
   const kind = state.other.kindLabel.toLowerCase();
   // several requirements per request, each with its own fresh search results
@@ -4431,7 +4448,12 @@ ${[...shown.values()].sort((a, b) => a.i - b.i).map(c => `[O${c.i}] (${where(c)}
       const st = String(c.status || '').toLowerCase(), n = (it.chk ? it.chk.n : 0) + 1;
       if (!ST_LABEL[st]) continue;
       const otherOk = cmpQuoteOk(c.other);
-      if (st === it.status) { if (it.chk && it.chk.status === 'corrected') it.chk = { ...it.chk, n, note: (it.chk.note || '') + ' Searched again after the correction and confirmed.' }; else it.chk = { status: 'confirmed', n, note: 'Searched again and reached the same answer.' }; confirmed++; }
+      if (st === it.status && !['gap', 'unclear'].includes(st) && !otherOk && !cmpQuoteOk(it.other)) {   // same answer, but still no quote found in the document
+        const wasDisputed = it.chk && it.chk.status === 'disputed';
+        it.chk = { status: 'disputed', n, was: it.chk && it.chk.was, note: `Says “${ST_LABEL[st]}”, but no quote backing it could be found in the ${kind}. Check by hand.` };
+        if (!wasDisputed) changed++;
+      }
+      else if (st === it.status) { if (otherOk) it.other = c.other; if (it.chk && it.chk.status === 'corrected') it.chk = { ...it.chk, n, note: (it.chk.note || '') + ' Searched again after the correction and confirmed.' }; else it.chk = { status: 'confirmed', n, note: 'Searched again and reached the same answer.' }; confirmed++; }
       else if (st !== 'gap' && !otherOk) { it.chk = { status: 'disputed', n, note: `A second look said “${ST_LABEL[st]}” but its quote couldn’t be found in the ${kind}. Check by hand.` }; changed++; }
       else if (it.chk && it.chk.status === 'corrected') { it.chk = { ...it.chk, status: 'disputed', n, note: `Corrected once already, and a further look now says “${ST_LABEL[st]}”. Check by hand.` }; changed++; }
       else { it.chk = { status: 'corrected', n, was: ST_LABEL[it.status] + (it.note ? ': ' + it.note : ''), note: c.note || '' }; it.status = st; it.other = st === 'gap' ? null : c.other || it.other; if (c.note) it.note = c.note; changed++; }
@@ -4647,7 +4669,7 @@ async function openSpec(file) {
   document.body.classList.remove('no-doc');
   $('.tabs').hidden = true;
   if (state._specDoc) { try { state._specDoc.destroy(); } catch {} } state._specDoc = null;
-  state.summaries.clear(); state.cmpItems = []; state.current = null; state.pdfLibDoc = null; state.askScope = ''; state.specBlob = file;
+  state.summaries.clear(); state.cmpItems = []; state.cmpCheck = null; state.cmpSecs = []; state.cmpTried = new Set(); state.ask = null; state.current = null; state.pdfLibDoc = null; state.askScope = ''; state.specBlob = file;
   $('#pane-ask').dataset.built = ''; $('#pane-compare').dataset.built = ''; state.picked = new Set();
   await ensureProject(file.name.replace(/\.pdf$/i, ''));
   $('#fileInfo').textContent = file.name;

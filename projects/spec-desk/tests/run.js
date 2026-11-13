@@ -57,6 +57,7 @@ const results = []; const log = (name, ok, detail) => { results.push({ name, ok,
   log('Auto-check (summary): missed "Locks" requirement added by the second look', sc.pts.some(p => /added r1/.test(p) && /Locks/.test(p)), sc.pts.filter(p => /Locks/.test(p)).join());
   log('Auto-check (summary): wrong 75 lbf corrected to the spec\'s 100 lbf', sc.pts.some(p => /^corrected: Drawer Slides: Full-extension, ball-bearing, 100 lbf/.test(p)), sc.pts.filter(p => /slide/i.test(p)).join());
   log('Auto-check (summary): hinge point with invented quote flagged for a person, not corrected', sc.pts.some(p => /^disputed: Hinges are concealed/.test(p)), sc.pts.filter(p => /hinge/i.test(p)).join());
+  log('Auto-check (summary): a correction that invents a value (6 mm) is not accepted; it goes to a person', sc.pts.some(p => /^disputed: Shelf Supports: 5 mm/.test(p)), sc.pts.filter(p => /Shelf/.test(p)).join());
   log('Auto-check (summary): every point checked; loop settled within 5 rounds', !sc.pts.some(p => /^unchecked/.test(p)) && sc.log.rounds.length <= 5 && /Settled/.test(sc.log.stopped), `${sc.log.rounds.length} rounds: ${sc.log.stopped}`);
   await shot('02-summary');
 
@@ -93,6 +94,9 @@ const results = []; const log = (name, ok, detail) => { results.push({ name, ok,
   console.log('     compare check:', cc.shown);
   log('Auto-check (Compare): "match" on warranty re-read as two-year vs One-year and corrected to conflict', cc.items.some(i => /^corrected: Warranty -> conflict/.test(i)), cc.items.filter(i => /Warranty/.test(i)).join(' | '));
   log('Auto-check (Compare): false gap (edgebanding) found on a fresh search and corrected to match', cc.items.some(i => /^corrected: Edgebanding -> match/.test(i)), cc.items.filter(i => /Edgeband/.test(i)).join(' | '));
+  const cq = await ev(() => state.cmpItems.filter(i => /^(Pull|Shelf)$/.test(i.topic)).map(i => `${i.topic}: ${i.status} ${i.chk ? i.chk.status : 'unchecked'} quote ${i.other ? (cmpQuoteOk(i.other) ? 'found' : 'NOT found') : 'none'}`));
+  log('Auto-check (Compare): a "match" with an invented proposal quote is searched again and gets a real quote', cq.some(x => /^Pull: match confirmed quote found/.test(x)), cq.join(' | '));
+  log('Auto-check (Compare): a bare "gap" can\'t overturn a match whose quote is in the proposal; flagged, quote kept', cq.some(x => /^Shelf: match disputed quote found/.test(x)), cq.join(' | '));
   log('Auto-check (Compare): spec paragraphs the first pass skipped are now reported', cc.items.some(i => /added r1/.test(i)), cc.items.filter(i => /added/.test(i)).slice(0, 6).join(' | '));
   log('Auto-check (Compare): every finding except "extra" checked; settled within 5 rounds', !cc.items.some(i => /^unchecked/.test(i) && !/-> extra/.test(i)) && /Settled/.test(cc.log.stopped), `${cc.log.rounds.length} rounds: ${cc.log.stopped}; unchecked: ${cc.items.filter(i => /^unchecked/.test(i)).join(', ')}`);
   await page.click('#cmpCsv');
