@@ -1,0 +1,4 @@
+# HR settings and any exported records: never commit (see setup/SETUP.md)
+private-build/
+*.xlsx
+*.csv

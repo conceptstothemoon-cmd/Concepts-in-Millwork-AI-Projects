@@ -1,6 +1,6 @@
-<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>CIM HR Hub</title>
-<meta name="claude:viewport-fit-sides" content="cover">
+<style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
@@ -104,9 +104,14 @@ pre.copy { white-space: pre-wrap; background: var(--chip); padding: 10px 12px; b
   .brand, .rail .group { display: none } .rail button { white-space: nowrap; flex: none }
   .g4 { grid-template-columns: repeat(2, minmax(0,1fr)) } .g2, .g3, .g21 { grid-template-columns: minmax(0,1fr) } .typepick { grid-template-columns: minmax(0,1fr) }
 }
+.acct { float: right; display: inline-flex; gap: 8px; align-items: center }
 </style>
+<script src="vendor/msal-browser.min.js"></script>
+<script src="config.js"></script>
+<script src="m365.js"></script>
+</head><body>
 
-<div class="banner"><b>Version 1</b> · Data is stored in this Claude artifact, not CIM's Microsoft 365. Don't enter pay, Social Security numbers, home addresses, medical, benefit or self-ID information. <button class="linkbtn" data-fbquick data-admin>Give feedback on this screen</button> <span id="conn"></span></div>
+<div class="banner"><span class="acct" id="acct"></span><b>Version 2</b> · Data is stored in CIM's SharePoint. Don't enter pay, Social Security numbers, home addresses, medical, benefit or self-ID information. <button class="linkbtn" data-fbquick data-admin>Give feedback on this screen</button> <span id="conn"></span></div>
 <div class="shell">
   <nav class="rail" aria-label="Screens">
     <div class="brand">CIM HR Hub<small>Concepts in Millwork</small></div>
@@ -181,7 +186,7 @@ function render() {
   const nf = S.feedback.filter(f => (f.status || "New") === "New").length, cf = $("#c-fb"); if (cf) { cf.hidden = !nf; cf.textContent = nf; }
   const focus = document.activeElement && document.activeElement.id;
   const main = $("#main");
-  const html = (VIEWS[S.view] || VIEWS.dashboard)();
+  const html = (S.admin && S.loaded.rules && !S.rules.length && S.view !== "feedback") ? setupView() : (VIEWS[S.view] || VIEWS.dashboard)();
   main.innerHTML = `<div class="view">${html}</div>`;
   if (focus) { const el = document.getElementById(focus); if (el) { el.focus(); } }
 }
@@ -201,7 +206,7 @@ document.addEventListener("focusout", () => setTimeout(() => { if (pending && !i
 
 async function write(path, data, kind = "set") {
   try { const ref = S.db.doc(path); await (kind === "update" ? ref.update(data) : ref.set(data)); return true; }
-  catch (e) { toast(e && e.code === "invalid_argument" ? "You don't have permission to change this." : "Couldn't save. Try again."); return false; }
+  catch (e) { toast(e && (e.code === "invalid_argument" || e.code === "not_granted") ? "You don't have permission to change this." : e && e.code === "too_large" ? "That's too large to save." : "Couldn't save. Try again."); return false; }
 }
 async function remove(path) { try { await S.db.doc(path).delete(); return true; } catch (e) { toast("Couldn't delete. Try again."); return false; } }
 async function inSeries(items, fn, n = 4) { let i = 0; const run = async () => { while (i < items.length) { const k = i++; await fn(items[k]); } }; await Promise.all(Array.from({ length: n }, run)); }
@@ -418,9 +423,9 @@ const VIEWS = {
     const mine = S.tasks.filter(t => t.owner === S.owner && t.kind !== "docusign" && t.kind !== "record");
     const open = mine.filter(t => t.status !== "Done").sort((a, b) => (a.due || "").localeCompare(b.due || ""));
     const done = mine.filter(t => t.status === "Done").sort((a, b) => (b.doneAt || "").localeCompare(a.doneAt || "")).slice(0, 8);
-    return `<div class="head"><div><div class="eyebrow">For every owner</div><h1>My tasks</h1><p class="lead">Only your steps, with due dates. Mark them done here and Meheerah's dashboard updates.</p></div>
+    return `<div class="head"><div><div class="eyebrow">For every owner</div><h1>My tasks</h1><p class="lead">Only your steps, with due dates. Mark them done here and HR's dashboard updates.</p></div>
       <div class="field" style="min-width:220px"><label for="ownerpick">I am</label><select id="ownerpick">${owners.map(o => `<option ${o === S.owner ? "selected" : ""}>${esc(o)}</option>`).join("")}</select></div></div>
-    ${!S.loaded.tasks ? `<div class="empty">Loading tasks…</div>` : S.canWrite === false ? `<div class="note">You can view these tasks but not mark them done. Ask Meheerah to share the Hub with you as a Contributor.</div>` : ""}
+    ${!S.loaded.tasks ? `<div class="empty">Loading tasks…</div>` : S.canWrite === false ? `<div class="note">You can view these tasks but not mark them done. Ask HR for edit access to the HR Hub Tasks list.</div>` : ""}
     <div class="grid g21"><div class="stack"><h2>Open · ${open.length}</h2>${open.map(t => taskRow(t, false, true)).join("") || `<div class="panel empty">Nothing open for ${esc(S.owner)}.</div>`}</div>
     <div class="panel stack"><h2>Recently done</h2>${done.length ? `<ul class="list">${done.map(t => `<li><span class="owner">${fmt(t.doneAt)}</span><span>${esc(t.personName)}: ${esc(t.step)}</span></li>`).join("")}</ul>` : `<p class="muted small" style="margin:0">Nothing yet.</p>`}</div></div>`;
   },
@@ -792,20 +797,43 @@ document.addEventListener("submit", async e => {
     if (await write("paper/" + rid("paper"), { form: v("form"), person: v("person"), filed: v("filed"), from: v("from"), received: today() })) { e.target.reset(); toast("Logged"); } return; }
 });
 
-// ---------- boot ----------
+// ---------- first run: load the starting setup ----------
+function setupView() {
+  const st = S.setupImport;
+  return `<div class="head"><div><div class="eyebrow">One-time setup</div><h1>Load your checklists</h1><p class="lead">The HR Hub lists in SharePoint are empty. Load the starting setup file (hr-hub-setup.json) to add your checklist rules, questions, departments, message templates and field map. You can change all of them afterwards under Settings.</p></div></div>
+  ${st ? `<div class="panel stack"><h2>${st.done < st.total ? `Loading ${st.done} of ${st.total}…` : `Loaded ${st.total} settings`}</h2>${st.failed ? `<p class="small" style="color:var(--bad);margin:0">${st.failed} couldn't be saved. Load the file again to retry them.</p>` : ""}<p class="small muted" style="margin:0">Keep this page open until it finishes.</p></div>`
+    : `<label class="dropzone" for="setupfile"><input id="setupfile" type="file" accept=".json,application/json" data-setupfile hidden><b>Choose hr-hub-setup.json</b><span class="small muted">The file you were given with this version. It isn't stored on the website.</span></label>`}`;
+}
+async function loadSetup(file) {
+  let parsed; try { parsed = JSON.parse(await file.text()); } catch (er) { return toast("That isn't the HR Hub setup file."); }
+  if (!parsed || parsed.format !== "hr-hub-setup-1" || !parsed.collections) return toast("That isn't the HR Hub setup file.");
+  const items = []; Object.entries(parsed.collections).forEach(([c, docs]) => Object.entries(docs).forEach(([id, d]) => items.push([c + "/" + id, d])));
+  S.setupImport = { total: items.length, done: 0, failed: 0 }; render();
+  await inSeries(items, async ([path, d]) => { try { await S.db.doc(path).set(d); } catch (er) { S.setupImport.failed++; } S.setupImport.done++; scheduleRender(); }, 3);
+  toast(S.setupImport.failed ? "Some settings didn't save" : "Checklists loaded"); setTimeout(() => { S.setupImport = null; render(); }, 1500);
+}
+document.addEventListener("change", e => { if (e.target.dataset && e.target.dataset.setupfile !== undefined) { const f = e.target.files && e.target.files[0]; e.target.value = ""; if (f) loadSetup(f); } });
+
+// ---------- boot: sign in with Microsoft 365, then load the lists ----------
+function bootMessage(title, text, button) {
+  $("#main").innerHTML = `<div class="view"><div class="panel empty stack"><h2>${esc(title)}</h2><p class="muted" style="margin:0">${esc(text)}</p>${button ? `<div class="row" style="justify-content:center"><button class="btn" id="bootbtn">${esc(button)}</button></div>` : ""}</div></div>`;
+  document.querySelectorAll("[data-admin]").forEach(el => { el.hidden = true; });
+}
 (async () => {
-  // Runs only on claude.ai, which provides the database, sign-in and downloads. Elsewhere, say so instead of loading forever.
-  if (!window.claude || !window.claude.use) { $("#main").innerHTML = `<div class="view"><div class="panel empty"><h2>Open the HR Hub from claude.ai</h2><p class="muted">This version keeps its data in a Claude artifact, so it only works from the claude.ai link HR shares. This copy is the source code.</p></div></div>`; return; }
-  const [db, user, downloads] = await Promise.all([claude.use("db"), claude.use("user"), claude.use("downloads")]);
-  S.db = db; S.user = user; S.downloads = downloads;
-  if (!db) { $("#main").innerHTML = `<div class="view"><div class="panel empty"><h2>Sign in to use the HR Hub</h2><p class="muted">The Hub's data loads for people Meheerah has shared it with.</p></div></div>`; return; }
-  if (user) { S.admin = !!(await user.canEdit()); S.canWrite = await user.can("data.write"); try { S.uid = await user.id(); } catch (er) {} }
+  let c;
+  try { c = await HRM365.connect(); } catch (er) { return bootMessage("The HR Hub couldn't start", (er && er.message) || "Reload the page."); }
+  const acct = $("#acct");
+  if (c.account && acct) { acct.innerHTML = `<span>${esc(c.account.name)}</span><button class="linkbtn" id="signout">Sign out</button>`; $("#signout").onclick = c.signOut; }
+  if (c.state === "not_configured") return bootMessage("Not connected yet", "The HR Hub stores its data in CIM's SharePoint, and it hasn't been connected yet. IT: see setup/SETUP.md in the HR Hub folder.");
+  if (c.state === "signed_out") { bootMessage("Sign in to the HR Hub", "Use your Concepts in Millwork Microsoft 365 account.", "Sign in"); $("#bootbtn").onclick = c.signIn; return; }
+  if (c.state !== "ready") return bootMessage("The HR Hub couldn't load", c.message || "Reload the page.");
+  S.db = c.db; S.user = c.user; S.downloads = c.downloads;
+  S.admin = !!(await c.user.canEdit()); S.canWrite = await c.user.can("data.write"); try { S.uid = await c.user.id(); } catch (er) {}
   S.view = S.admin ? "dashboard" : "mytasks";
   const sp = store.get("hrhub-proc"); if (sp && PROCS[sp]) S.proc = sp;
-  const timer = setTimeout(() => { const c = $("#conn"); if (c && !S.loaded.rules) c.textContent = "Still connecting; data may be out of date."; }, 10000);
-  [["rules", "rules"], ["messages", "messages"], ["questions", "questions"], ["fields", "fields"], ["departments", "departments"], ["settingsList", "settings"], ["tasks", "tasks"]].forEach(([n, c]) => subscribe(n, c));
-  if (S.admin) [["people", "people"], ["interviews", "interviews"], ["paper", "paper"], ["feedback", "feedback"]].forEach(([n, c]) => subscribe(n, c));
-  const iv = setInterval(() => { if (S.loaded.rules) { clearTimeout(timer); const c = $("#conn"); if (c) c.textContent = ""; clearInterval(iv); } }, 500);
+  [["rules", "rules"], ["messages", "messages"], ["questions", "questions"], ["fields", "fields"], ["departments", "departments"], ["settingsList", "settings"], ["tasks", "tasks"]].forEach(([n, cl]) => subscribe(n, cl));
+  if (S.admin) [["people", "people"], ["interviews", "interviews"], ["paper", "paper"], ["feedback", "feedback"]].forEach(([n, cl]) => subscribe(n, cl));
+  c.start();
   render();
 })();
 })();
