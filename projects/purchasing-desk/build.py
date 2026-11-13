@@ -2,7 +2,8 @@
 
 Run:  python build.py
 Reads src/app.html, src/style.css and data/supplier-prices.json
-and writes Purchasing-Desk-Beta.html, a file anyone can open in a browser.
+and writes Purchasing-Desk-Beta.html, a file anyone can open in a browser,
+plus an identical index.html so the folder opens as a web page when hosted.
 """
 import json
 from pathlib import Path
@@ -23,6 +24,7 @@ head = """<!doctype html>
 <style>html,body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 """
 html = head + style + "\n</head>\n<body>\n" + app.replace("__DATA__", json.dumps(data, separators=(",", ":"))) + "\n</body>\n</html>\n"
-out = HERE / "Purchasing-Desk-Beta.html"
-out.write_text(html, encoding="utf-8")
-print(f"Wrote {out.name} ({len(html):,} bytes)")
+for name in ("Purchasing-Desk-Beta.html", "index.html"):
+    out = HERE / name
+    out.write_text(html, encoding="utf-8")
+    print(f"Wrote {out.name} ({len(html):,} bytes)")

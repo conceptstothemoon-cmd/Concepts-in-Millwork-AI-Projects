@@ -1,5 +1,11 @@
 # Changelog
 
+## Folder move — November 13, 2026
+
+- Moved from `projects/purchasing-desk-beta1/purchasing-desk/` to `projects/purchasing-desk/`.
+- `build.py` now also writes `index.html`, identical to `Purchasing-Desk-Beta.html`, so the folder has a default page.
+- Added `.gitignore` so supplier PDFs and spreadsheets stay out of the repo.
+
 ## Beta 1 — November 12, 2026
 
 First version sent to Jim to try.

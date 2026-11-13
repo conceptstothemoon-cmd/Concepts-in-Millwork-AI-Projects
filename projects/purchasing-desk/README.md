@@ -12,7 +12,7 @@ Built by the BYU internship team (Hamid Jaeyoung Jahangir and Ian Wilcox), Novem
 | --- | --- |
 | Try the tool | Open `Purchasing-Desk-Beta.html` in Chrome or Edge. No install, no login. |
 | Send it to Jim | Email or Teams him `Purchasing-Desk-Beta.html` as an attachment. He saves it and double-clicks it. |
-| Change the tool | Edit `src/app.html` or `src/style.css`, then run `python build.py`. |
+| Change the tool | Edit `src/app.html` or `src/style.css`, then run `python build.py`. It rewrites both `Purchasing-Desk-Beta.html` and `index.html`. |
 | Load new supplier prices | Run `python tools/extract_prices.py CONTRACT.txt PRICE_SHEET.xlsx`, then `python build.py`. |
 
 ## What's real and what's sample data
@@ -53,7 +53,8 @@ The beta does not connect to Innergy, email or any vendor. Nothing leaves the co
 ```
 purchasing-desk/
   Purchasing-Desk-Beta.html   The built tool. This is the only file Jim needs.
-  build.py                    Combines src/ and data/ into the built tool.
+  index.html                  Same page as Purchasing-Desk-Beta.html, so the folder opens as a web page if hosted.
+  build.py                    Combines src/ and data/ into the built tool (writes both files above).
   src/app.html                Page markup and all logic (plain JavaScript, no libraries).
   src/style.css               Styles, with light and dark themes.
   data/supplier-prices.json   Wurth and Soudal prices pulled from Jim's files.

@@ -1,0 +1,7 @@
+# Supplier source documents stay out of the repo
+*.pdf
+*.PDF
+*.xlsx
+*.xls
+*.txt
+__pycache__/
