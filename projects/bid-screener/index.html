@@ -1,0 +1,1156 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Bid Screener Sandbox</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=Domine:wght@600;700&display=swap">
+<style>
+/* Layout: one working column under a sticky tab bar; a detail drawer slides over the right side (full screen on phones). */
+:root{
+  --bg:#F2F4F7; --surface:#FCFCFD; --raise:#F6F7F9; --ink:#1B2430; --muted:#556070; --line:#DCE1E7;
+  --accent:#1F4E8C; --accent-ink:#FFFFFF; --accent-soft:#E5EDF8;
+  --decline:#9C3A12; --decline-soft:#FBECE4; --look:#7A5200; --look-soft:#F6EEDA;
+  --ok:#1E6B45; --ok-soft:#E4F1E9; --sample:#6B4A00; --sample-bg:#FFF2CC; --shade:rgba(20,28,38,.35);
+  --f-ui:'Public Sans', 'Segoe UI', Arial, sans-serif; --f-display:'Domine', Georgia, serif;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#11161C; --surface:#182029; --raise:#1E2731; --ink:#E6EAEF; --muted:#9DA9B7; --line:#2C3743;
+  --accent:#8DB4EC; --accent-ink:#0E1A2B; --accent-soft:#1C2C43;
+  --decline:#F2A27C; --decline-soft:#3A2219; --look:#E4C27C; --look-soft:#332A1A;
+  --ok:#82D0A5; --ok-soft:#173021; --sample:#F2D58A; --sample-bg:#3A3118; --shade:rgba(0,0,0,.55); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#11161C; --surface:#182029; --raise:#1E2731; --ink:#E6EAEF; --muted:#9DA9B7; --line:#2C3743;
+  --accent:#8DB4EC; --accent-ink:#0E1A2B; --accent-soft:#1C2C43;
+  --decline:#F2A27C; --decline-soft:#3A2219; --look:#E4C27C; --look-soft:#332A1A;
+  --ok:#82D0A5; --ok-soft:#173021; --sample:#F2D58A; --sample-bg:#3A3118; --shade:rgba(0,0,0,.55); color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-ui);font-size:15px;line-height:1.45}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--surface)}
+.wrap{max-width:1180px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header.top{background:var(--surface);border-bottom:1px solid var(--line);position:sticky;top:env(safe-area-inset-top,0px);z-index:5}
+.top .wrap{padding-block:14px 0;display:flex;flex-direction:column;gap:10px}
+.brand{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px 16px}
+.brand h1{font-family:var(--f-display);font-size:22px;margin:0;text-wrap:balance}
+.brand p{margin:0;color:var(--muted);font-size:13px}
+nav.tabs{display:flex;flex-wrap:wrap;gap:2px}
+nav.tabs button{font:inherit;font-size:14px;font-weight:600;background:none;border:0;border-bottom:3px solid transparent;color:var(--muted);padding:8px 12px;cursor:pointer;white-space:nowrap}
+nav.tabs button[aria-selected="true"]{color:var(--accent);border-bottom-color:var(--accent)}
+nav.tabs .n{font-variant-numeric:tabular-nums;font-weight:500;margin-left:4px}
+main .wrap{padding-block:20px 96px;display:flex;flex-direction:column;gap:18px}
+h2{font-size:18px;margin:0}
+h3{font-size:15px;margin:0}
+.lede{color:var(--muted);margin:0;max-width:70ch}
+.tablebox .btn{white-space:nowrap}
+.steps{margin:4px 0 0;padding-left:22px;display:flex;flex-direction:column;gap:2px;font-size:15px;max-width:70ch}
+.tabsep{align-self:center;width:1px;height:22px;background:var(--line);margin:0 8px}
+.note{background:var(--accent-soft);border-radius:var(--r);padding:10px 14px;font-size:14px}
+button,select,input,textarea{font:inherit}
+.btn{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:8px;padding:7px 12px;font-weight:600;font-size:14px;cursor:pointer;min-height:36px}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.decline{background:var(--decline);color:var(--surface);border-color:var(--decline)}
+.btn.ghost{border-color:transparent;background:none;color:var(--accent);padding-inline:6px}
+.btn:disabled{opacity:.5;cursor:default}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+input[type=text],input[type=number],input[type=date],select,textarea{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:8px;padding:6px 8px;min-height:34px;max-width:100%}
+textarea{width:100%;min-height:120px;resize:vertical}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px}
+.stat b{display:block;font-size:26px;font-variant-numeric:tabular-nums}
+.stat span{color:var(--muted);font-size:13px}
+.stat.decline b{color:var(--decline)} .stat.review b{color:var(--accent)} .stat.look b{color:var(--look)} .stat.ok b{color:var(--ok)}
+.group{display:flex;flex-direction:column;gap:10px}
+.group > h2{display:flex;align-items:center;gap:8px}
+.group > h2 .count{font-weight:500;color:var(--muted);font-size:14px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.card.k-decline{border-left:4px solid var(--decline)} .card.k-review{border-left:4px solid var(--accent)} .card.k-look{border-left:4px solid var(--look)} .card.k-not{border-left:4px solid var(--line)}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.spread{display:flex;flex-wrap:wrap;gap:6px 16px;justify-content:space-between;align-items:baseline}
+.title{font-weight:700;font-size:16px}
+.meta{color:var(--muted);font-size:14px}
+.why{font-size:14px}
+.chip{display:inline-block;font-size:12px;font-weight:600;padding:3px 8px;border-radius:6px;background:var(--raise);color:var(--ink);border:1px solid var(--line)}
+.chip.warn{background:var(--decline-soft);color:var(--decline);border-color:transparent}
+.chip.sample{background:var(--sample-bg);color:var(--sample);border-color:transparent;letter-spacing:.04em}
+.chip.real{background:var(--ok-soft);color:var(--ok);border-color:transparent;letter-spacing:.04em}
+.pill{font-size:12px;font-weight:700;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.pill.decline{background:var(--decline-soft);color:var(--decline)} .pill.review{background:var(--accent-soft);color:var(--accent)} .pill.look{background:var(--look-soft);color:var(--look)} .pill.not{background:var(--raise);color:var(--muted)} .pill.ok{background:var(--ok-soft);color:var(--ok)}
+.due{font-weight:600;font-size:14px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.empty{border:1px dashed var(--line);border-radius:var(--r);padding:18px;color:var(--muted);text-align:center}
+.tablebox{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{background:var(--raise);font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);white-space:nowrap}
+td.num{font-variant-numeric:tabular-nums}
+tr:last-child td{border-bottom:0}
+.checktext{color:var(--decline);font-size:13px}
+.filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;flex-wrap:wrap}
+.seg button{border:0;background:var(--surface);padding:6px 10px;font-weight:600;font-size:13px;color:var(--muted);cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent)}
+.twocol{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field label,.label{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px}
+.kv div{background:var(--raise);border-radius:8px;padding:8px 10px;min-width:0;overflow-wrap:anywhere}
+.kv div.src-invite{background:var(--accent-soft)} .kv div.src-rule{background:var(--raise)} .kv div.src-sales{background:var(--decline-soft)}
+.kv small{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.bar{height:12px;background:var(--raise);border-radius:4px;flex:1;min-width:60px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent)}
+.bars{display:flex;flex-direction:column;gap:8px}
+.bars .row{flex-wrap:nowrap}
+.bars .lab{width:110px;font-size:14px}
+.bars .val{width:32px;text-align:right;font-variant-numeric:tabular-nums}
+/* Drawer */
+.scrim{position:fixed;inset:0;background:var(--shade);z-index:20}
+aside.drawer{position:fixed;top:0;right:0;bottom:0;width:min(640px,100%);background:var(--surface);z-index:21;border-left:1px solid var(--line);display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px);padding-right:env(safe-area-inset-right,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.drawer header{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;padding:16px 18px;border-bottom:1px solid var(--line)}
+.drawer .body{overflow-y:auto;padding:16px 18px 40px;display:flex;flex-direction:column;gap:16px}
+.drawer section{display:flex;flex-direction:column;gap:8px}
+.copybox{white-space:pre-wrap;background:var(--raise);border-radius:8px;padding:10px 12px;font-size:14px}
+/* Feedback button */
+.fab{position:fixed;right:calc(16px + env(safe-area-inset-right,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:15;box-shadow:0 4px 14px var(--shade)}
+.fbpanel{position:fixed;right:calc(16px + env(safe-area-inset-right,0px));bottom:calc(68px + env(safe-area-inset-bottom,0px));z-index:16;width:min(380px,calc(100% - 32px));background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px;box-shadow:0 8px 28px var(--shade)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--surface);padding:8px 14px;border-radius:8px;z-index:30;font-size:14px}
+.fbitem{display:flex;flex-direction:column;gap:4px}
+.fbitem.done{opacity:.6}
+@media (prefers-reduced-motion:no-preference){aside.drawer{animation:slide .18s ease-out}@keyframes slide{from{transform:translateX(24px);opacity:.6}}}
+@media (max-width:560px){.brand h1{font-size:19px}.bars .lab{width:84px}}
+</style>
+
+<header class="top">
+  <div class="wrap">
+    <div class="brand">
+      <h1>Bid Screener <span style="font-size:.6em;vertical-align:middle;border:1px solid currentColor;border-radius:6px;padding:1px 6px">BETA</span></h1>
+      <p>Beta for Sales and Estimating · not connected to email or Innergy yet · use “Suggest a change” to tell us what to fix</p>
+    </div>
+    <nav class="tabs" id="tabs" role="tablist" aria-label="Screens"></nav>
+  </div>
+</header>
+<main><div class="wrap" id="view"></div></main>
+<button class="btn primary fab" id="fab" type="button">Suggest a change</button>
+<div id="overlay"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+(() => {
+'use strict';
+const TABS = [
+  {id:'digest', label:'1. Today’s invites'},
+  {id:'try', label:'2. Check an invite'},
+  {id:'review', label:'3. Bid review'},
+  {id:'estimates', label:'4. Past estimates'},
+  {id:'ask', label:'5. Ask a question'},
+  {id:'archive', label:'Archive', setup:true},
+  {id:'gcs', label:'GC list', setup:true},
+  {id:'criteria', label:'Rules', setup:true},
+  {id:'score', label:'Accuracy', setup:true},
+  {id:'feedback', label:'Suggestions', setup:true},
+];
+const STAGES = ['Awaiting bid review','Awaiting estimating capacity check','Back to Sales','Bidding (accepted)','Passed at review'];
+const TIERS = ['Top','Mid','Low','Watch','Do Not Bid'];
+const TRENDS = ['','Growing','Steady','Shrinking','Unknown'];
+const DEFAULT_SETTINGS = {homeStates:['CO','WY','NE','KS','OK','NM','UT'], dueSoonDays:7,
+  flags:{dueSoon:true,outOfArea:true,dd:true,hardBid:true,noLink:true,watch:true,check:true,award:true,sameProject:true,busy:true,smallScope:true,offPlatform:true,pastDue:true}, unlisted:'decline', busyDays:3, busyCount:4, smallScopeWords:['restroom','countertop','solid surface'],
+  segments:[{name:'Large Healthcare',score:1},{name:'K-12 School',score:1},{name:'Office TI',score:1},{name:'Higher Ed',score:0.8},{name:'Hospitality',score:0.6},{name:'Luxury Living',score:0.4},{name:'Med Office Bldg',score:0.4},{name:'Entertainment',score:0.4},{name:'Government',score:0.2},{name:'Miscellaneous',score:0.2}],
+  awardBasis:[{name:'Negotiated',score:1},{name:'Hard Bid',score:0},{name:"Don't Know",score:0.5}],
+  bidTypes:[{name:'Award',score:1},{name:'Budget',score:0.4},{name:'RoM',score:0.5}]};
+
+const S = {tab:'digest', gcs:new Map(), invites:new Map(), decisions:new Map(), feedback:new Map(), estimates:new Map(), estRows:new Map(), askLog:[], askBusy:false, askDraft:'', estUpload:null, estDel:null,
+  settings:null, loaded:{gcs:false,invites:false}, db:null, user:null, me:null, sample:null,
+  openId:null, fbOpen:false, gcQuery:'', gcTier:'All', showHandled:false, tryResult:null, tryBusy:false, tryErr:'', confirmClear:false, profiles:{}};
+try { const t = localStorage.getItem('bss-tab'); if (TABS.some(x => x.id === t)) S.tab = t; } catch (e) {}
+if (TABS.some(x => x.id === location.hash.slice(1))) S.tab = location.hash.slice(1);
+
+const $ = (sel, root=document) => root.querySelector(sel);
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const settings = () => Object.assign({}, DEFAULT_SETTINGS, S.settings || {}, {flags:Object.assign({}, DEFAULT_SETTINGS.flags, (S.settings||{}).flags||{})});
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const fmtDate = d => { if (!d || !/^\d{4}-\d{2}-\d{2}/.test(d)) return ''; return MONTHS[+d.slice(5,7)-1] + ' ' + (+d.slice(8,10)); };
+const dayNum = d => Date.parse(d.slice(0,10) + 'T12:00:00Z') / 864e5;
+const today = () => new Date().toISOString().slice(0,10);
+const money = n => '$' + Math.round(n).toLocaleString('en-US');
+function toast(msg){ const t = document.createElement('div'); t.className='toast'; t.textContent = msg; document.body.append(t); setTimeout(() => t.remove(), 2400); }
+
+/* ---------- GC matching: full names only, punctuation and endings ignored ---------- */
+const ENDINGS = new Set(['inc','llc','co','company','companies','construction','constructors','corp','corporation','the','ltd','group','general','contractors','builders']);
+function norm(s){
+  const words = String(s||'').toLowerCase().replace(/\(.*?\)/g,' ').replace(/&/g,' and ').replace(/[^a-z0-9 ]+/g,' ').split(/\s+/).filter(Boolean);
+  const out = []; let run = false;
+  for (const w of words){ if (w.length === 1 && run) out[out.length-1] += w; else out.push(w); run = w.length === 1 || (run && w.length === 1); }
+  while (out.length > 1 && ENDINGS.has(out[out.length-1])) out.pop();
+  while (out.length > 1 && out[0] === 'the') out.shift();
+  return out.join(' ');
+}
+function matchGC(inv){
+  const target = norm(inv.gcText);
+  const dom = String(inv.contactEmail||'').split('@')[1]?.toLowerCase() || '';
+  for (const [id, g] of S.gcs){
+    const names = [g.name, ...String(g.aka||'').split(';')].map(norm).filter(Boolean);
+    if (target && names.includes(target)) return {id, g};
+    if (dom && String(g.domains||'').toLowerCase().split(/[;,\s]+/).includes(dom)) return {id, g};
+  }
+  return null;
+}
+function screen(inv){
+  const m = matchGC(inv); const tier = m ? (m.g.tier || 'No tier') : 'No match';
+  let rec, why;
+  if (inv.emailType && inv.emailType !== 'New invite'){ rec='not'; why = `${inv.emailType}, not a new invitation.`; }
+  else if (!S.gcs.size){ rec='look'; why = 'Your GC list is empty, so there’s nothing to compare this GC to yet. Import your GC list on the “GC list” screen.'; }
+  else if (tier === 'Top' || tier === 'Mid'){ rec='review'; why = `${m.g.name} is ${tier} tier, so every project goes to bid review.`; }
+  else if (tier === 'Do Not Bid'){ rec='decline'; why = `${m.g.name} is on the Do Not Bid list.`; }
+  else if (tier === 'Low'){ rec='look'; why = `${m.g.name} is Low tier: add only if scope and schedule align.`; }
+  else if (tier === 'Watch'){ rec='look'; why = `${m.g.name} is on the Watch list.`; }
+  else if (tier === 'No tier'){ rec='look'; why = `${m.g.name} is on the GC list without a tier.`; }
+  else if (settings().unlisted === 'decline'){ rec='decline'; why = `“${inv.gcText || 'Unknown GC'}” is not on the GC list, and the Rules screen says to suggest declining GCs that aren’t listed.`; }
+  else { rec='look'; why = `“${inv.gcText || 'Unknown GC'}” is not on the GC list.`; }
+  return {rec, tier, gc:m, why, flags:flagsFor(inv, m, tier)};
+}
+function stateOf(loc){ const x = String(loc||'').match(/,\s*([A-Z]{2})\b(?:\s*\d{5})?/); return x ? x[1] : ''; }
+function baseProject(p){ return norm(String(p||'').split(':')[0].replace(/^(bid invite|cd bid|invite to bid)\s*[-:]?\s*/i,'').replace(/invitation to bid.*$/i,'').replace(/\b(project|100% ?cds?|for award)\b.*$/i,'')); }
+function flagsFor(inv, m, tier){
+  const st = settings(), f = st.flags, out = [];
+  if (f.watch && tier === 'Watch') out.push({t:'Watch list'});
+  if (f.check && m && /\?\s*$/.test(m.g.check||'')) out.push({t:'Open question: ' + m.g.check, warn:true});
+  if (f.dueSoon && inv.due && inv.received){ const d = dayNum(inv.due) - dayNum(inv.received); if (d >= 0 && d <= st.dueSoonDays) out.push({t:`Due within ${st.dueSoonDays} days`, warn:true}); }
+  const s = stateOf(inv.location); if (f.outOfArea && s && !st.homeStates.includes(s)) out.push({t:'Out of area ('+s+')', warn:true});
+  if (f.dd && /\bDD\b/.test(inv.stage || inv.project || '')) out.push({t:'DD set: pricing may be budget-level'});
+  if (f.hardBid && inv.award === 'Hard Bid') out.push({t:'Hard bid (scores 0 on the calculator)'});
+  if (f.noLink && !inv.hasRfpLink) out.push({t:'No RFP or plans link'});
+  const text = [inv.project, inv.package, inv.description].join(' ');
+  if (f.award && /for award|award round|\bgmp\b|final pricing|\brebid\b/i.test(text)) out.push({t:'Award round or final pricing'});
+  if (f.offPlatform && inv.platform === 'Direct email') out.push({t:'Not on a bid platform: reply by email'});
+  if (f.pastDue && inv.due && inv.due < today()) out.push({t:'Bid date has passed'});
+  if (f.smallScope){ const w = (st.smallScopeWords||[]).find(w => w && text.toLowerCase().includes(w.toLowerCase())); if (w) out.push({t:`Possible small scope (“${w}”)`, warn:true}); }
+  if (f.sameProject && inv.id){ const base = baseProject(inv.project); for (const [oid, o] of S.invites){ if (oid === inv.id || !base || baseProject(o.project) !== base || (o.emailType && o.emailType !== 'New invite')) continue; const om = matchGC(o); out.push({t:`Same project also invited by ${om ? om.g.name + ' (' + (om.g.tier||'no tier') + ')' : o.gcText}`}); } }
+  if (f.busy && inv.due && inv.id){ let n = 0; for (const [oid, o] of S.invites){ if (oid === inv.id || !o.due || (o.emailType && o.emailType !== 'New invite')) continue; const om = matchGC(o); const t = om ? om.g.tier : ''; if (!['Top','Mid','Low','Watch'].includes(t)) continue; if (Math.abs(dayNum(o.due) - dayNum(inv.due)) <= (st.busyDays||3)) n++; } if (n >= (st.busyCount||4)) out.push({t:`${n} other bids due within ${st.busyDays||3} days: check estimating capacity`}); }
+  for (const x of (inv.extraFlags||[])) if (!out.some(o => o.t === x)) out.push({t:x, warn:/rebid/i.test(x)});
+  return out;
+}
+const REC = {decline:{label:'We suggest declining', pill:'Suggest decline'}, review:{label:'We suggest bid review', pill:'Suggest bid review'}, look:{label:'You decide', pill:'You decide'}, not:{label:'Not a bid invite', pill:'Not an invite'}};
+const DEC = {decline:'Declined', review:'Sent to bid review', look:'Left for later', not:'Marked not an invite'};
+const declineLabel = p => ({SmartBid:'No, I Won’t Bid', BuildingConnected:'Not Bidding', Procore:'Will Not Bid'})[p] || 'Send decline';
+const decisionRec = d => d === 'decline' ? 'decline' : d === 'review' ? 'review' : d === 'not' ? 'not' : 'look';
+
+/* ---------- Size band from the calculator's ranges ---------- */
+function sizeBand(v){
+  if (!v) return {band:'Not stated', note:'No dollar value in the invite'};
+  if (v >= 1e6) return {band:'Mega', note:'$1M and up'};
+  if (v > 750e3) return {band:'Between Large and Mega', note:'The calculator has no band for $750K–$1M'};
+  if (v >= 500e3) return {band:'Large', note:'$500K–$750K'};
+  if (v >= 250e3) return {band:'Medium', note:'$250K–$500K'};
+  if (v >= 100e3) return {band:'Small', note:'$100K–$250K'};
+  return {band:'Mini', note:'Under $100K'};
+}
+
+/* ---------- Rendering ---------- */
+function activeInvites(){ return sortedInvites().filter(i => !i.archived); }
+function sortedInvites(){ return [...S.invites.entries()].map(([id,v]) => ({id, ...v})).sort((a,b) => String(a.due||'9999').localeCompare(String(b.due||'9999'))); }
+function renderTabs(){
+  const counts = {feedback:[...S.feedback.values()].filter(f => !f.done).length};
+  const pending = activeInvites().filter(i => !S.decisions.has(i.id)).length; counts.digest = pending;
+  counts.review = activeInvites().filter(i => S.decisions.get(i.id)?.decision === 'review').length;
+  $('#tabs').innerHTML = TABS.map((t,i) => `${t.setup && !TABS[i-1].setup ? '<span class="tabsep" aria-hidden="true"></span>' : ''}<button role="tab" type="button" data-tab="${t.id}" aria-selected="${S.tab===t.id}">${esc(t.label)}${counts[t.id] ? `<span class="n">${counts[t.id]}</span>` : ''}</button>`).join('');
+}
+function render(){
+  renderTabs();
+  const v = $('#view');
+  const fn = {archive:viewArchive, digest:viewDigest, review:viewReview, gcs:viewGCs, criteria:viewCriteria, try:viewTry, ask:viewAsk, estimates:viewEstimates, score:viewScore, feedback:viewFeedback}[S.tab];
+  const active = document.activeElement; const keepId = active && active.id;
+  v.innerHTML = fn();
+  if (keepId){ const el = document.getElementById(keepId); if (el && el !== active && el.matches('input,textarea')) { el.focus(); try{ el.setSelectionRange(el.value.length, el.value.length);}catch(e){} } }
+  renderOverlay();
+  if (S.tab === 'feedback') hydrateNames();
+}
+function storeNote(){
+  if (S.db === null) return `<p class="note">This page can’t load its information here. Open it from claude.ai while signed in to your company account.</p>`;
+  if (!S.loaded.invites) return `<div class="empty">Loading…</div>`;
+  return '';
+}
+function inviteCard(inv, sc, dec, preview){
+  const k = dec ? decisionRec(dec.decision) : sc.rec;
+  const badge = inv.sample ? '<span class="chip sample">EXAMPLE</span>' : (inv.source === 'pasted' ? '<span class="chip real">ADDED BY YOU</span>' : inv.actual ? '<span class="chip real">PAST INVITE</span>' : '<span class="chip real">REAL INVITE</span>');
+  const gcLine = sc.gc ? `${esc(sc.gc.g.name)} (${esc(sc.tier)})` : `${esc(inv.gcText||'Unknown GC')} (not on the GC list)`;
+  const due = inv.due ? `Due ${fmtDate(inv.due)}${inv.dueTime ? ', ' + esc(inv.dueTime) : ''}` : 'Bid date not stated';
+  const btn = (d, label) => { const r = sc.rec === d; return `<button class="btn ${r ? (d === 'decline' ? 'decline' : 'primary') : ''}" data-act="decide" data-d="${d}" data-id="${inv.id}" type="button">${esc(label)}${r ? ' (suggested)' : ''}</button>`; };
+  const opts = [['decline', declineLabel(inv.platform)], ['review', 'Send to bid review'], ['not', 'Not an invite']].sort((a,b) => (b[0] === sc.rec) - (a[0] === sc.rec));
+  const actions = preview ? '' : dec
+    ? `<span class="pill ${k}">${esc(DEC[dec.decision])}</span>${dec.decision !== sc.rec && dec.decision !== 'look' ? '<span class="pill decline">Different from our suggestion</span>' : ''}<button class="btn ghost" data-act="undo" data-id="${inv.id}" type="button">Undo</button><button class="btn" data-act="archive" data-id="${inv.id}" type="button">Move to archive</button>`
+    : (sc.rec === 'look' ? '<span class="meta" style="font-weight:600">You decide:</span>' : '') + opts.map(([d,l]) => btn(d, l)).join('');
+  return `<article class="card k-${k}">
+    <div class="spread"><div class="row">${badge}<span class="title">${esc(inv.project)}</span></div><span class="due">${due}</span></div>
+    <div class="meta">${gcLine} · ${esc(inv.platform||'Email')}${inv.location ? ' · ' + esc(inv.location) : ''}${inv.package ? ' · ' + esc(inv.package) : ''}</div>
+    <div class="why"><span class="pill ${sc.rec}">${REC[sc.rec].pill}</span> ${esc(sc.why)}</div>
+    ${sc.flags.length ? `<div class="row"><span class="meta">Worth a look:</span>${sc.flags.map(f => `<span class="chip ${f.warn?'warn':''}">${esc(f.t)}</span>`).join('')}</div>` : ''}
+    ${preview ? '' : `<div class="row">${actions}<button class="btn ghost" data-act="open" data-id="${inv.id}" type="button">Open details</button>${dec ? '' : `<button class="btn ghost" data-act="archive" data-id="${inv.id}" type="button">Archive</button>`}</div>`}
+  </article>`;
+}
+const DIGEST_LEDE = 'New bid invites, each with our suggestion. Nothing is sent to a GC until you click a button.';
+const DIGEST_STEPS = ['New invites: choose saved emails or PDFs in the box below, or paste one on “2. Check an invite”.', 'Read the suggestion on each card. Click the suggested button to agree, or click a different one.', 'Done with an invite? Click “Move to archive” to clear it off this page. You can always find it again on the Archive tab.'];
+function viewDigest(){
+  const note = storeNote(); if (note) return head('Today’s invites', DIGEST_LEDE) + note;
+  const all = activeInvites().map(i => ({inv:i, sc:screen(i), dec:S.decisions.get(i.id)}));
+  const open = all.filter(x => !x.dec), done = all.filter(x => x.dec);
+  const by = r => open.filter(x => x.sc.rec === r);
+  const nArch = S.invites.size - all.length;
+  const past = all.filter(x => x.inv.due && x.inv.due < today()).map(x => x.inv.id);
+  const group = (r) => { const xs = by(r); if (!xs.length) return ''; return `<section class="group"><h2>${REC[r].label}<span class="count">${xs.length}</span></h2>${xs.map(x => inviteCard(x.inv, x.sc, null)).join('')}</section>`; };
+  return head('Today’s invites', DIGEST_LEDE, DIGEST_STEPS)
+  + `<div class="stats">
+      <div class="stat decline"><b>${by('decline').length}</b><span>we suggest declining</span></div>
+      <div class="stat review"><b>${by('review').length}</b><span>we suggest bid review</span></div>
+      <div class="stat look"><b>${by('look').length}</b><span>need you to decide</span></div>
+      <div class="stat"><b>${by('not').length}</b><span>not bid invites</span></div>
+    </div>
+    ${bulkCard('home')}
+    ${past.length ? `<div class="row"><button class="btn" type="button" data-act="archpast">Move ${past.length} invite${past.length===1?'':'s'} whose bid date has passed to the archive</button></div>` : ''}
+    ${open.length ? '' : all.length ? '<div class="empty">All caught up. Add new invites above.</div>' : `<div class="empty" style="font-size:15px">No current invites. Add new ones in the box above.${nArch ? ` ${nArch} older invite${nArch===1?' is':'s are'} in the <button class="btn ghost" style="padding:0;min-height:0" type="button" data-tab="archive">Archive</button>.` : ''}</div>`}
+    ${group('decline')}${group('review')}${group('look')}${group('not')}
+    ${done.length ? `<section class="group"><h2>Already handled<span class="count">${done.length}</span><button class="btn" data-act="toggleHandled" type="button">${S.showHandled ? 'Hide these' : 'Show these'}</button><button class="btn" data-act="archhandled" type="button">Move all ${done.length} to the archive</button></h2>${S.showHandled ? done.map(x => inviteCard(x.inv, x.sc, x.dec)).join('') : ''}</section>` : ''}`;
+}
+function head(t, lede, steps){ return `<div class="group"><h2 style="font-size:20px">${esc(t)}</h2><p class="lede">${esc(lede)}</p>${steps ? `<ol class="steps">${steps.map(s => `<li>${esc(s)}</li>`).join('')}</ol>` : ''}</div>`; }
+function viewReview(){
+  const lede = 'Projects you sent to bid review (Mondays 10 AM and Thursdays 1 PM). When a project moves on, pick its new step from the list. It saves on its own.';
+  const note = storeNote(); if (note) return head('Bid review', lede) + note;
+  const rows = activeInvites().filter(i => S.decisions.get(i.id)?.decision === 'review');
+  return head('Bid review', lede)
+  + `<p class="note">The steps, in order: ${STAGES.slice(0,4).map((s,i) => `${i+1}. ${esc(s)}`).join(' → ')}. Or “${esc(STAGES[4])}” if the team says no. When a project is finished here, click Archive to move it off this list.</p>`
+  + (rows.length ? `<div class="tablebox"><table><thead><tr><th>Project</th><th>GC (tier)</th><th>Bid due</th><th>Where it is now</th><th></th></tr></thead><tbody>
+    ${rows.map(i => { const sc = screen(i), d = S.decisions.get(i.id); return `<tr><td><b>${esc(i.project)}</b>${i.sample?' <span class="chip sample">EXAMPLE</span>':''}<div class="meta">${esc(i.location||'')}</div></td>
+      <td>${sc.gc ? esc(sc.gc.g.name)+' ('+esc(sc.tier)+')' : esc(i.gcText)}</td><td class="num">${i.due ? fmtDate(i.due) : 'Not stated'}</td>
+      <td><select id="stage-${i.id}" data-act="stage" data-id="${i.id}" aria-label="Step for ${esc(i.project)}">${STAGES.map(s => `<option ${d.stage===s?'selected':''}>${s}</option>`).join('')}</select></td>
+      <td><div class="row" style="gap:4px;flex-wrap:nowrap"><button class="btn ghost" data-act="open" data-id="${i.id}" type="button">Open details</button><button class="btn" data-act="archive" data-id="${i.id}" type="button">Archive</button></div></td></tr>`; }).join('')}
+    </tbody></table></div>` : `<div class="empty">Nothing here yet. On “Today’s invites”, click “Send to bid review” on a project and it shows up here.</div>`);
+}
+function gcCounts(){ const c = {}; for (const i of S.invites.values()){ const m = matchGC(i); if (m) c[m.id] = (c[m.id]||0) + 1; } return c; }
+function viewGCs(){
+  const lede = 'Every general contractor and its tier. The tier decides our suggestion: Do Not Bid means decline, Top or Mid means bid review, and anything else means a person decides. Changes save on their own.';
+  const note = storeNote(); if (note && !S.loaded.gcs) return head('GC list', lede) + note;
+  const q = norm(S.gcQuery); const counts = gcCounts(); const more = !!S.gcMore;
+  let list = [...S.gcs.entries()].map(([id,g]) => ({id,...g}));
+  if (S.gcTier === 'Needs an answer') list = list.filter(g => g.check);
+  else if (S.gcTier === 'No tier') list = list.filter(g => !g.tier);
+  else if (S.gcTier !== 'All') list = list.filter(g => g.tier === S.gcTier);
+  if (q) list = list.filter(g => norm(g.name + ' ' + (g.aka||'')).includes(q));
+  const order = {Top:0, Mid:1, Low:2, Watch:3, 'Do Not Bid':4};
+  list.sort((a,b) => ((order[a.tier] ?? 5) - (order[b.tier] ?? 5)) || a.name.localeCompare(b.name));
+  const cols = 4 + (more ? 5 : 0);
+  if (!S.gcs.size) return head('GC list', lede) + `<p class="note">Your GC list is empty. Start by importing it from a spreadsheet. Until then, every invite is left for a person to decide.</p>` + gcImportCard(true);
+  return head('GC list', lede)
+  + `<div class="filters">
+      <input type="text" id="gc-search" placeholder="Type a GC name to find it" value="${esc(S.gcQuery)}" aria-label="Find a GC" data-act="gcsearch">
+      <div class="seg" role="group" aria-label="Show only">${['All',...TIERS,'No tier','Needs an answer'].map(t => `<button type="button" data-act="gctier" data-t="${t}" aria-pressed="${S.gcTier===t}">${t}</button>`).join('')}</div>
+    </div>
+    <div class="row"><button class="btn" type="button" data-act="gcmore">${more ? 'Show fewer columns' : 'Show more columns'}</button><span class="meta">Showing ${list.length} of ${S.gcs.size} GCs</span></div>
+    <div class="tablebox"><table><thead><tr><th>GC</th>${more ? '<th>Other names it goes by</th><th>Email domains</th>' : ''}<th>Tier</th>${more ? '<th>Trend</th>' : ''}<th>Notes for the team</th>${more ? '<th>Check again on</th><th>Calculator score</th>' : ''}<th>Invites</th></tr></thead><tbody>
+    ${list.map(g => `<tr>
+      <td><b>${esc(g.name)}</b>${g.check ? `<div class="checktext">Open question: ${esc(g.check)}</div>` : ''}</td>
+      ${more ? `<td><input type="text" id="aka-${g.id}" value="${esc(g.aka||'')}" data-act="gcfield" data-f="aka" data-id="${g.id}" aria-label="Other names for ${esc(g.name)}" style="width:190px"></td><td><input type="text" id="dom-${g.id}" value="${esc(g.domains||'')}" data-act="gcfield" data-f="domains" data-id="${g.id}" placeholder="e.g. gcname.com" aria-label="Email domains for ${esc(g.name)}" style="width:160px"></td>` : ''}
+      <td><select id="tier-${g.id}" data-act="gcfield" data-f="tier" data-id="${g.id}" aria-label="Tier for ${esc(g.name)}"><option value="" ${!g.tier?'selected':''}>No tier</option>${TIERS.map(t => `<option ${g.tier===t?'selected':''}>${t}</option>`).join('')}</select></td>
+      ${more ? `<td><select id="trend-${g.id}" data-act="gcfield" data-f="trend" data-id="${g.id}" aria-label="Trend for ${esc(g.name)}">${TRENDS.map(t => `<option value="${t}" ${ (g.trend||'')===t?'selected':''}>${t||'—'}</option>`).join('')}</select></td>` : ''}
+      <td><input type="text" id="notes-${g.id}" value="${esc(g.notes||'')}" data-act="gcfield" data-f="notes" data-id="${g.id}" placeholder="${esc(g.why||'')}" aria-label="Notes for ${esc(g.name)}" style="width:220px"></td>
+      ${more ? `<td><input type="date" id="rev-${g.id}" value="${esc(g.revisit||'')}" data-act="gcfield" data-f="revisit" data-id="${g.id}" aria-label="Check again date for ${esc(g.name)}"></td><td class="num">${g.score != null ? Number(g.score).toFixed(1) : '—'}</td>` : ''}
+      <td class="num">${counts[g.id]||0}</td></tr>`).join('') || `<tr><td colspan="${cols}" class="meta">No GCs match. Check the spelling, or add it below.</td></tr>`}
+    </tbody></table></div>
+    <form class="card" id="gc-add" data-act="addgc">
+      <h3>Add a GC that isn’t on the list</h3>
+      <div class="row"><input type="text" id="gc-new-name" placeholder="GC name, e.g. Frontline Construction Inc." required aria-label="New GC name" style="flex:1 1 240px">
+      <label for="gc-new-tier" class="meta">Tier</label><select id="gc-new-tier">${TIERS.map(t => `<option ${t==='Watch'?'selected':''}>${t}</option>`).join('')}</select>
+      <button class="btn primary" type="submit">Add GC</button></div>
+    </form>
+    ${gcImportCard(false)}`;
+}
+function viewCriteria(){
+  const st = settings(), f = st.flags;
+  const tog = (k, label) => `<label class="row" style="gap:8px"><input type="checkbox" id="flag-${k}" data-act="flag" data-k="${k}" ${f[k]?'checked':''}> ${esc(label)}</label>`;
+  const scoreTable = (title, rows) => rows && rows.length ? `<div class="field"><span class="label">${esc(title)}</span><div class="tablebox"><table><tbody>${rows.map(r => `<tr><td>${esc(r.name)}</td><td class="num">${Number(r.score).toFixed(1)}</td></tr>`).join('')}</tbody></table></div></div>` : '';
+  return head('Rules', 'Choose which invites we suggest declining and which warnings show on each card. Changes save on their own and apply to every card right away.')
+  + `<div class="card"><h3>Which invites we suggest declining</h3>
+      <p>We suggest declining an invite when the GC is marked <b>Do Not Bid</b> on the GC list. A person still clicks every decline.</p>
+      <div class="field"><label for="unlisted">When the GC is not on the GC list at all:</label><select id="unlisted" data-act="unlisted"><option value="look" ${st.unlisted!=='decline'?'selected':''}>Let a person decide</option><option value="decline" ${st.unlisted==='decline'?'selected':''}>Suggest declining</option></select><span class="meta">Set to “Suggest declining” because the sales team declined every GC that wasn’t on its list in 15 past invites. Switch it back if new GCs should get a look.</span></div>
+    </div>
+    <div class="card"><h3>Warnings to show on cards</h3>
+      <p class="meta">Warnings never decline anything. They only point something out. Uncheck any you don’t find useful.</p>
+      ${tog('dueSoon','The bid is due soon after the invite arrived')}
+      <div class="row" style="padding-left:26px"><label for="due-days" class="meta">“Soon” means within</label><input type="number" id="due-days" min="1" max="30" value="${st.dueSoonDays}" data-act="duedays" style="width:72px"><span class="meta">days</span></div>
+      ${tog('outOfArea','The project is outside the states we bid')}
+      <div class="field" style="padding-left:26px"><label for="home-states">States we bid, separated by commas</label><input type="text" id="home-states" value="${esc(st.homeStates.join(', '))}" data-act="states"></div>
+      ${tog('busy','Many other bids are due the same week (check with Estimating)')}
+      <div class="row" style="padding-left:26px"><label for="busy-count" class="meta">Warn when at least</label><input type="number" id="busy-count" min="1" max="20" value="${st.busyCount||4}" data-act="busycount" style="width:64px"><label for="busy-days" class="meta">other bids are due within</label><input type="number" id="busy-days" min="1" max="14" value="${st.busyDays||3}" data-act="busydays" style="width:64px"><span class="meta">days</span></div>
+      ${tog('smallScope','The millwork scope might be small')}
+      <div class="field" style="padding-left:26px"><label for="small-words">Words that usually mean a small scope, separated by commas</label><input type="text" id="small-words" value="${esc((st.smallScopeWords||[]).join(', '))}" data-act="smallwords"></div>
+      ${tog('watch','The GC is on the Watch list')}
+      ${tog('check','The GC has an open question on the GC list')}
+      ${tog('sameProject','More than one GC invited us to the same project')}
+      ${tog('award','It’s an award round or final pricing')}
+      ${tog('dd','The drawings are early (DD set)')}
+      ${tog('hardBid','It’s a hard bid')}
+      ${tog('noLink','There’s no link to plans or the RFP')}
+      ${tog('offPlatform','It came by plain email, not a bid website')}
+      ${tog('pastDue','The bid date has already passed')}
+      <p class="meta">A few warnings come from the invite itself, like “Possible rebid”. Those always show.</p>
+    </div>
+    <details class="card"><summary style="cursor:pointer;font-weight:700">Words used for the project calculator</summary>
+      <p class="meta">From Project Review Criteria v3.1. When Claude reads an invite, it picks from exactly these words, or says “Not stated”.</p>
+      ${scoreTable('Segment', st.segments)}${scoreTable('Award basis', st.awardBasis)}${scoreTable('Bid type', st.bidTypes)}
+    </details>`;
+}
+function showCard(id, focus){ setTimeout(() => { const c = document.getElementById(id); if (!c) return; c.scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block:'start'}); if (focus) c.focus({preventScroll:true}); }, 60); }
+function viewTry(){
+  const r = S.tryResult;
+  return head('Check an invite', 'Add invites here. Paste one email to check it, or further down, add a whole batch of saved emails and PDFs at once.', ['Copy the whole invite email and paste it in the box below.', 'Press “Check this invite”.', 'Your result appears right below. Press “Add to Today’s invites” to keep it.'])
+  + (S.sample === null ? `<p class="note">Checking invites isn’t available in this view. The other screens still work.</p>` : '')
+  + `<div class="card">
+      <div class="field"><label for="try-text" style="font-size:14px">The invite email</label><textarea id="try-text" style="min-height:140px" placeholder="Paste the whole email here, including who it’s from">${esc(S.tryDraft||'')}</textarea></div>
+      <div class="field"><label for="try-file" class="meta">Or choose one saved email (.eml) or invite PDF</label><input type="file" id="try-file" accept=".eml,.txt,.pdf,message/rfc822,application/pdf" data-act="emlfile"></div>
+      <div class="row"><button class="btn primary" type="button" data-act="screenit" style="font-size:17px;padding:10px 22px;min-height:46px" ${S.tryBusy||!S.sample?'disabled':''}>${S.tryBusy ? 'Reading it…' : 'Check this invite'}</button><span class="meta">The first time, you may be asked to allow Claude to read it.</span></div>
+    </div>
+    ${S.tryBusy ? `<section class="card" id="try-card" tabindex="-1" style="border:2px solid var(--accent)"><h2 style="font-size:20px">Your result</h2><p style="font-size:17px;font-weight:600;color:var(--accent);margin:0">Reading the invite. This usually takes 10 to 30 seconds.</p></section>` : ''}
+    ${S.tryErr && !S.tryBusy ? `<section class="card" id="try-card" tabindex="-1" style="border:2px solid var(--decline)"><h2 style="font-size:20px">Your result</h2><p style="font-size:17px;margin:0">${esc(S.tryErr)}</p></section>` : ''}
+    ${r && !S.tryBusy ? (() => { const sc = screen(r); return `<section class="card" id="try-card" tabindex="-1" style="border:2px solid var(--accent);gap:12px"><h2 style="font-size:20px">Your result</h2>${inviteCard({...r, id:'preview'}, sc, null, true)}
+      <details><summary style="cursor:pointer;font-weight:600">More details Claude found</summary><div class="kv" style="margin-top:8px">${kvs([['GC named in the email', r.gcText],['Owner or architect', r.owner],['Trade codes', r.trade],['Contact', [r.contactName, r.contactEmail].filter(Boolean).join(' · ')],['Segment', r.segment],['Award basis', r.award],['Bid type', r.bidType],['Stated value', r.stated ? money(r.stated) : 'Not stated'],['Description', r.description]])}</div></details>
+      <div class="row"><button class="btn primary" type="button" data-act="addtry">Add to Today’s invites</button><button class="btn" type="button" data-act="cleartry">Start over</button></div></section>`; })() : ''}
+    ${!S.tryBusy && !r && !S.tryErr ? '<div class="empty" style="font-size:15px">Your result will appear here.</div>' : ''}
+    ${bulkCard('try')}`;
+}
+const kvs = pairs => pairs.map(([k,v,src]) => `<div class="${src?'src-'+src:''}"><small>${esc(k)}</small>${esc(v || 'Not stated')}</div>`).join('');
+function backtestRows(){
+  return sortedInvites().filter(i => i.actual && i.actual.outcome).map(i => {
+    const sc = screen(i), o = i.actual.outcome; let res, cls;
+    if (o === 'Declined at screening'){ if (sc.rec === 'decline'){ res='Match'; cls='ok'; } else { res='We missed a decline'; cls='look'; } }
+    else if (sc.rec === 'decline'){ res='Wrongly suggested decline'; cls='decline'; }
+    else if (sc.rec === 'review'){ res='Match'; cls='ok'; }
+    else { res='Match (left for a person)'; cls='ok'; }
+    return {i, sc, o, res, cls};
+  });
+}
+function backtest(){
+  const rows = backtestRows();
+  const n = rows.length, match = rows.filter(r => r.cls === 'ok').length, wrong = rows.filter(r => r.cls === 'decline').length, missed = rows.filter(r => r.cls === 'look').length;
+  if (!n) return '';
+  return `<section class="card" style="border:2px solid var(--accent);gap:12px"><h3>Tested on the sales team’s ${n} past invites</h3>
+    <p style="font-size:17px;margin:0">Our suggestion matched what the team actually did on <b>${match} of ${n}</b> invites${wrong ? `, but it wrongly suggested declining <b>${wrong}</b>` : ', and it never wrongly suggested a decline'}${missed ? `. It missed ${missed} decline${missed===1?'':'s'}` : ''}.</p>
+    <p class="meta">This re-checks itself every time someone changes a tier on the GC list or a setting on Rules.</p>
+    <details><summary style="cursor:pointer;font-weight:600">See each past invite</summary>
+    <div class="tablebox" style="margin-top:8px"><table><thead><tr><th>Invite</th><th>GC (tier)</th><th>Our suggestion</th><th>What the team did</th><th>Result</th><th>Warnings shown</th></tr></thead><tbody>
+    ${rows.map(r => `<tr><td><button class="btn ghost" style="padding:0;min-height:0;text-align:left" type="button" data-act="open" data-id="${r.i.id}">${esc(r.i.project)}</button></td><td>${r.sc.gc ? esc(r.sc.gc.g.name)+' ('+esc(r.sc.tier)+')' : esc(r.i.gcText)+' (not listed)'}</td><td><span class="pill ${r.sc.rec}">${REC[r.sc.rec].pill}</span></td><td>${esc(r.o)}<div class="meta">${esc(r.i.actual.note||'')}</div></td><td><span class="pill ${r.cls}">${esc(r.res)}</span></td><td>${r.sc.flags.filter(f => f.warn).map(f => `<span class="chip warn">${esc(f.t)}</span>`).join(" ") || "<span class=\"meta\">None</span>"}</td></tr>`).join('')}
+    </tbody></table></div></details>
+    ${missed ? `<p class="meta">A missed decline usually means the GC isn’t on the GC list. Add it there, or on Rules set “When the GC is not on the GC list” to “Suggest declining”.</p>` : ''}
+  </section>`;
+}
+function viewScore(){
+  const lede = 'How often our suggestions match what the sales team decides. This is how we show it works before it goes live.';
+  const note = storeNote(); if (note) return head('Accuracy', lede) + note;
+  const all = sortedInvites().map(i => ({i, sc:screen(i), d:S.decisions.get(i.id)}));
+  const decided = all.filter(x => x.d && x.d.decision !== 'look');
+  const agree = decided.filter(x => x.d.decision === x.sc.rec || (x.sc.rec === 'look' && x.d.decision !== 'decline') ).length;
+  const wrongDecl = decided.filter(x => x.sc.rec === 'decline' && x.d.decision !== 'decline');
+  const missed = decided.filter(x => x.d.decision === 'decline' && x.sc.rec !== 'decline');
+  const tiers = {}; for (const x of all) tiers[x.sc.tier] = (tiers[x.sc.tier]||0) + 1;
+  const max = Math.max(1, ...Object.values(tiers));
+  const tierOrder = ['Top','Mid','Low','Watch','Do Not Bid','No tier','No match'];
+  const diffs = [...wrongDecl, ...missed];
+  return head('Accuracy', lede)
+  + backtest()
+  + `<section class="card"><h3>Clicks made on this page</h3>
+      <p style="margin:0">${decided.length ? `People have decided <b>${decided.length}</b> of the ${all.length} invites here. They agreed with our suggestion <b>${Math.round(agree/decided.length*100)}%</b> of the time.` : `No one has decided any invites here yet. Go to “Today’s invites” and click a button on a few cards.`}</p>
+      <div class="stats">
+        <div class="stat decline"><b>${wrongDecl.length}</b><span>times we suggested decline but the person didn’t (goal: 0)</span></div>
+        <div class="stat look"><b>${missed.length}</b><span>times the person declined but we didn’t suggest it</span></div>
+      </div>
+      ${diffs.length ? `<h3>Where people disagreed with us</h3>${diffs.map(x => `<div class="fbitem" style="border-top:1px solid var(--line);padding-top:8px"><b>${esc(x.i.project)}</b><span class="meta">We suggested: ${REC[x.sc.rec].pill} · They chose: ${DEC[x.d.decision]}</span><button class="btn" style="align-self:flex-start" type="button" data-act="fbabout" data-p="${esc(x.i.project)}">Tell us why</button></div>`).join('')}` : ''}
+    </section>
+    <details class="card"><summary style="cursor:pointer;font-weight:700">Invites by GC tier</summary><div class="bars" style="margin-top:8px">${tierOrder.filter(t => tiers[t]).map(t => `<div class="row"><span class="lab">${esc(t)}</span><div class="bar"><i style="width:${tiers[t]/max*100}%"></i></div><span class="val">${tiers[t]}</span></div>`).join('')}</div></details>
+    <div class="card"><h3>Start over</h3><p class="meta">Erases every click on “Today’s invites” for everyone, so the next person sees a fresh list. The GC list, rules, estimates and suggestions stay.</p>
+      <div class="row">${S.confirmClear ? `<span>Erase ${S.decisions.size} clicks for everyone?</span><button class="btn decline" type="button" data-act="clearyes">Yes, erase them</button><button class="btn" type="button" data-act="clearno">No, keep them</button>` : `<button class="btn" type="button" data-act="clearask" ${S.decisions.size?'':'disabled'}>Erase all clicks</button>`}</div></div>`;
+}
+function viewFeedback(){
+  const items = [...S.feedback.entries()].map(([id,f]) => ({id,...f})).sort((a,b) => String(b.at).localeCompare(String(a.at)));
+  return head('Suggestions', 'Ideas and problems from everyone using this page. The BYU team reads every one to plan the next version.', ['Press “Suggest a change” (here or the button in the bottom corner of any screen).', 'Pick the screen it’s about and type what would make it better.', 'Press “Save suggestion”. It shows up in the list below.'])
+  + `<div class="row"><button class="btn primary" type="button" data-act="fbopen">Suggest a change</button></div>`
+  + (items.length ? items.map(f => `<article class="card fbitem ${f.done?'done':''}"><div class="spread"><span class="pill review">${esc(TABS.find(t => t.id===f.screen)?.label || f.screen || 'General')}</span><span class="meta" data-name="${esc(f.by||'')}">${esc(S.profiles[f.by]?.name || 'Someone')} · ${fmtDate(f.at)}</span></div><div style="white-space:pre-wrap">${esc(f.text)}</div><label class="row meta"><input type="checkbox" id="fbdone-${f.id}" data-act="fbdone" data-id="${f.id}" ${f.done?'checked':''}> Done (fixed in a later version)</label></article>`).join('') : `<div class="empty">No suggestions yet.</div>`);
+}
+let namesBusy = false;
+async function hydrateNames(){
+  if (!S.user || namesBusy) return; const ids = [...new Set([...S.feedback.values()].map(f => f.by).filter(Boolean))];
+  if (!ids.length || ids.every(i => S.profiles[i])) return;
+  namesBusy = true; try { S.profiles = {...S.profiles, ...(await S.user.profiles(ids))}; } finally { namesBusy = false; }
+  if (S.tab === 'feedback') render();
+}
+
+/* ---------- Drawer: details, scope brief, Innergy card ---------- */
+function renderOverlay(){
+  const o = $('#overlay'); let html = '';
+  if (S.openId && S.invites.has(S.openId)) html += drawer(S.openId);
+  if (S.fbOpen) html += fbPanel();
+  o.innerHTML = html;
+}
+function drawer(id){
+  const inv = {id, ...S.invites.get(id)}, sc = screen(inv), d = S.decisions.get(id);
+  const value = inv.stated || inv.innergyValue || 0; const sb = sizeBand(value);
+  const isRebid = (inv.extraFlags||[]).some(x => /rebid/i.test(x));
+  const card = [
+    ['Name *', inv.project, 'invite'],
+    ['Address', inv.location, 'invite'],
+    ['Bid date', inv.due ? fmtDate(inv.due) + (inv.dueTime ? ' ' + inv.dueTime : '') : 'Not in invite', 'invite'],
+    ['GC and contact', [sc.gc ? sc.gc.g.name : inv.gcText, inv.contactName, inv.contactEmail].filter(Boolean).join(' · '), 'invite'],
+    ['Basis of award', inv.award || 'Not in invite', inv.award ? 'invite' : 'sales'],
+    ['Bid name *', isRebid ? 'Next number (rebid)' : '1', 'rule'],
+    ['Projected revenue *', '$0', 'rule'],
+    ['First delivery *', today() + ' (today, unknown)', 'rule'],
+    ['Workflow step', 'Review Opportunity', 'rule'],
+    ['Review status', isRebid ? 'Rebid' : 'Ready for Project Review', 'rule'],
+    ['Bid type *', 'Sales chooses', 'sales'],
+    ['Win probability *', 'Sales chooses', 'sales'],
+    ['Target margin *', 'Sales chooses', 'sales'],
+    ['RFI due date', inv.rfi || 'Not in invite', 'invite'],
+  ];
+  const cardText = card.map(([k,v]) => `${k.replace(' *','')}: ${v}`).join('\n');
+  const capText = `Hi, ${inv.project} (${sc.gc ? sc.gc.g.name : inv.gcText}) is due ${inv.due ? fmtDate(inv.due) : '[date]'}. Size band: ${sb.band}. Suggested estimating days: [__]. Can we take it on?`;
+  return `<div class="scrim" data-act="close"></div><aside class="drawer" role="dialog" aria-modal="true" aria-label="${esc(inv.project)}">
+    <header><div><div class="row">${inv.sample ? '<span class="chip sample">EXAMPLE</span>' : '<span class="chip real">REAL INVITE</span>'}<span class="pill ${sc.rec}">${REC[sc.rec].pill}</span>${d ? `<span class="pill ok">${esc(DEC[d.decision])}</span>` : ''}</div><h2 style="margin-top:6px">${esc(inv.project)}</h2></div><button class="btn" type="button" data-act="close" id="drawer-close">Close</button></header>
+    <div class="body">
+      ${inv.actual && inv.actual.outcome ? `<section><h3>What the sales team decided</h3><p class="copybox">${esc(inv.actual.outcome)}${inv.actual.note ? ": " + esc(inv.actual.note) : ""}</p></section>` : ""}<section><h3>Invite details</h3><div class="kv">${kvs([['GC',(sc.gc?sc.gc.g.name+' ('+sc.tier+')':inv.gcText+' (not on the GC list)')],['Platform',inv.platform],['Received',fmtDate(inv.received)],['Bid due', inv.due ? fmtDate(inv.due) + (inv.dueTime?', '+inv.dueTime:'') : ''],['Location',inv.location],['Package',inv.package],['Drawing stage',inv.stage],['Trade codes',inv.trade],['Owner or architect',inv.owner],['Contact',[inv.contactName,inv.contactEmail].filter(Boolean).join(' · ')]])}</div>
+        ${inv.description ? `<p class="copybox">${esc(inv.description)}</p>` : ''}
+        <p style="margin:0"><span class="pill ${sc.rec}">${REC[sc.rec].pill}</span> ${esc(sc.why)}</p>
+        ${sc.flags.length ? `<div class="row"><span class="meta">Worth a look:</span>${sc.flags.map(f => `<span class="chip ${f.warn?'warn':''}">${esc(f.t)}</span>`).join('')}</div>` : ''}</section>
+      <section><h3>Project summary <span class="chip">COMING LATER</span></h3>
+        <div class="kv">${kvs([['Size band', sb.band + ' · ' + sb.note + (inv.innergyValue && !inv.stated ? ` (from Innergy: ${money(inv.innergyValue)})` : '')],['Segment', inv.segment],['Award basis', inv.award],['Bid type', inv.bidType],['Time to review the drawings','Coming later'],['Millwork drawing sheets','Coming later']])}</div>
+        <p class="meta">Later, this will list the millwork drawings by sheet number once it can open the plans on ${esc(inv.platform || 'the bid website')}. It will never price a job.</p>
+        <span class="label">Message asking Estimating if they have time for this bid</span><p class="copybox" id="cap-text">${esc(capText)}</p><button class="btn" type="button" data-act="copy" data-src="cap-text" style="align-self:flex-start">Copy message</button></section>
+      <section><h3>Details for entering into Innergy <span class="chip">COMING LATER</span></h3>
+        <p class="meta">The color shows where each detail comes from.</p>
+        <div class="row"><span class="chip" style="background:var(--accent-soft)">From the invite</span><span class="chip">Company rule</span><span class="chip" style="background:var(--decline-soft)">Sales fills in at review</span></div>
+        <div class="kv">${kvs(card)}</div>
+        <pre class="copybox" id="card-text" hidden>${esc(cardText)}</pre><button class="btn" type="button" data-act="copy" data-src="card-text" style="align-self:flex-start">Copy these details</button></section>
+      <section><h3>${inv.archived ? 'In the archive' : 'Done with this invite?'}</h3>${inv.archived ? `<p class="meta" style="margin:0">Archived ${inv.archivedAt ? fmtDate(inv.archivedAt.slice(0,10)) : ''}.</p><button class="btn" type="button" data-act="restore" data-id="${id}" style="align-self:flex-start">Restore to Today’s invites</button>` : `<button class="btn" type="button" data-act="archive" data-id="${id}" style="align-self:flex-start">Move to archive</button>`}</section>
+      <section><h3>Something wrong here?</h3><button class="btn primary" type="button" data-act="fbabout" data-p="${esc(inv.project)}" style="align-self:flex-start">Tell us what’s wrong</button></section>
+    </div></aside>`;
+}
+function fbPanel(){
+  return `<form class="fbpanel" data-act="fbsave" aria-label="Suggest a change">
+    <h3>Suggest a change</h3>
+    <div class="field"><label for="fb-screen">Which screen</label><select id="fb-screen">${TABS.map(t => `<option value="${t.id}" ${S.fbScreen===t.id?'selected':''}>${t.label}</option>`).join('')}<option value="general" ${S.fbScreen==='general'?'selected':''}>Something else</option></select></div>
+    <div class="field"><label for="fb-text">What would make it better?</label><textarea id="fb-text" required placeholder="For example: this GC should be Top tier, or I’d like to see the bid due time on every card">${esc(S.fbDraft||'')}</textarea></div>
+    <div class="row"><button class="btn primary" type="submit">Save suggestion</button><button class="btn" type="button" data-act="fbclose">Cancel</button></div>
+  </form>`;
+}
+
+/* ---------- Writes ---------- */
+async function write(fn, okMsg){
+  if (!S.db){ toast('Changes can’t be saved in this view.'); return; }
+  try { await fn(); if (okMsg) toast(okMsg); }
+  catch (e) { toast(e && e.code === 'quota_exceeded' ? 'Storage is full. Erase some clicks on the Accuracy screen.' : 'That didn’t save. Try again in a moment.'); }
+}
+const by = () => S.me || null;
+function decide(id, decision){
+  const rec = {decision, by:by(), at:new Date().toISOString(), stage: decision === 'review' ? STAGES[0] : null};
+  S.decisions.set(id, rec); render();
+  write(() => S.db.doc('decisions/' + id).set(rec), decision === 'decline' ? 'Declined. In the live version this is the platform’s own button.' : decision === 'review' ? 'Sent to bid review.' : 'Marked not an invite.');
+}
+let gcTimers = {};
+function gcField(id, f, value){
+  const g = S.gcs.get(id); if (!g) return;
+  S.gcs.set(id, {...g, [f]:value, updatedBy:by(), updatedAt:new Date().toISOString()});
+  clearTimeout(gcTimers[id+f]);
+  gcTimers[id+f] = setTimeout(() => write(() => S.db.doc('gcs/' + id).update({[f]:value, updatedBy:by(), updatedAt:new Date().toISOString()}), f==='tier' ? `${g.name} is now ${value||'without a tier'}.` : null), f==='tier'||f==='trend'||f==='revisit' ? 0 : 600);
+}
+function saveSettings(patch){
+  const next = {...settings(), ...patch, flags:{...settings().flags, ...(patch.flags||{})}};
+  S.settings = next; render();
+  write(() => S.db.doc('settings/criteria').set(next));
+}
+const slug = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,80) || ('gc-' + Date.now());
+
+
+/* ---------- Read a saved .eml file into plain text ---------- */
+function qpDecode(t){ return t.replace(/=\r?\n/g,'').replace(/=([0-9A-F]{2})/gi,(m,h)=>String.fromCharCode(parseInt(h,16))); }
+function utf8(bin){ try { return decodeURIComponent(escape(bin)); } catch(e){ return bin; } }
+function htmlToText(h){ const d = new DOMParser().parseFromString(h,'text/html'); d.querySelectorAll('script,style').forEach(n=>n.remove()); d.querySelectorAll('br').forEach(n=>n.replaceWith('\n')); d.querySelectorAll('p,div,tr,li,h1,h2,h3,td').forEach(n=>n.append('\n')); return d.body ? d.body.textContent : h; }
+function emlToText(raw){
+  const head = raw.split(/\r?\n\r?\n/)[0]; const hdr = k => (head.match(new RegExp('^'+k+':\\s*([^\\r\\n]*(?:\\r?\\n[ \\t][^\\r\\n]*)*)','im'))||[])[1]||'';
+  const parts = []; const walk = (chunk) => {
+    const [h, ...rest] = chunk.split(/\r?\n\r?\n/); const body = rest.join('\n\n');
+    const ct = (h.match(/^content-type:\s*([^;\r\n]+)/im)||[])[1]||'text/plain'; const bnd = (h.match(/boundary="?([^";\r\n]+)"?/i)||[])[1];
+    if (/multipart/i.test(ct) && bnd){ body.split('--'+bnd).slice(1).forEach(p => { if (!p.startsWith('--')) walk(p.replace(/^\r?\n/,'')); }); return; }
+    if (!/text\/(plain|html)/i.test(ct)) return;
+    const enc = (h.match(/^content-transfer-encoding:\s*([^\s;]+)/im)||[])[1]||''; let txt = body;
+    if (/base64/i.test(enc)){ try { txt = utf8(atob(body.replace(/\s+/g,''))); } catch(e){} } else if (/quoted/i.test(enc)) txt = utf8(qpDecode(body));
+    parts.push({html:/html/i.test(ct), txt}); };
+  walk(raw);
+  const pick = parts.find(p => p.html) || parts[0]; let text = pick ? (pick.html ? htmlToText(pick.txt) : pick.txt) : raw;
+  text = text.replace(/https?:\/\/\S+/g,'[link]').replace(/[ \t ‌]+/g,' ').replace(/\n\s*\n+/g,'\n').trim();
+  return `From: ${hdr('From')}\nTo: ${hdr('To')}\nDate: ${hdr('Date')}\nSubject: ${hdr('Subject')}\n\n${text}`.slice(0,20000);
+}
+
+/* ---------- Claude: read a pasted invite ---------- */
+function invitePrompt(text){
+  const st = settings();
+  return `You read bid invitation emails for Concepts in Millwork, a commercial architectural millwork subcontractor in Colorado Springs, Colorado. Extract facts only; do not decide whether to bid. Never guess a date, address or dollar value: use "" when the email does not say.
+The GC is the general contractor inviting the bid, not the owner, architect or bid platform. BuildingConnected emails read "Name from GC has invited you to bid"; SmartBid emails read "GC is inviting you"; Procore emails read "GC has invited you to bid". When the email never names the GC in a sentence, take it from the sender's company, email domain or signature (for example an @examplebuilders.com address means Example Builders, even if the signature shortens it to "EB").
+For segment use one of: ${st.segments.map(s=>s.name).join(', ')}. For award use one of: ${st.awardBasis.map(s=>s.name).join(', ')}. For bidType use one of: ${st.bidTypes.map(s=>s.name).join(', ')} ("For Award" in a title means Award). Use "" when unclear.
+Reply with only this JSON object:
+{"emailType":"New invite|Addendum|Date change|Reminder|Q&A|Award notice|Other","project":"","gcText":"","platform":"BuildingConnected|SmartBid|Procore|Direct email|Other","received":"YYYY-MM-DD or empty","due":"YYYY-MM-DD or empty","dueTime":"","location":"street, city, ST zip","package":"","stage":"e.g. DD, 50% CD, 100% CD, or empty","trade":"","owner":"","contactName":"","contactEmail":"","description":"one or two sentences, only what the email says","stated":0,"segment":"","award":"","bidType":"","hasRfpLink":true,"extraFlags":["short notes such as 'Description cut off' or 'Final bid round: possible rebid'"]}
+
+EMAIL:
+${String(text).slice(0, 20000)}`;
+}
+async function readInvite(text){
+  const r = await S.sample.json(invitePrompt(text), {modelTier:'default'});
+  if (!r || typeof r !== 'object' || !r.project) throw {code:'invalid_json'};
+  r.stated = Number(r.stated) || 0; r.extraFlags = Array.isArray(r.extraFlags) ? r.extraFlags.map(String).filter(Boolean).slice(0,4) : [];
+  r.sample = false; return r;
+}
+async function screenPasted(){
+  const text = ($('#try-text')?.value || '').trim(); S.tryDraft = text;
+  if (text.length < 40){ S.tryErr = 'Paste the whole invite email first, including who it’s from and the project details.'; render(); showCard('try-card'); return; }
+  S.tryBusy = true; S.tryErr = ''; S.tryResult = null; render(); showCard('try-card');
+  try {
+    const r = await readInvite(text); r.source = 'pasted'; S.tryResult = r;
+  } catch (e) {
+    S.tryErr = ({not_granted:'Asking Claude wasn’t allowed in this view.', rate_limited:'Too many requests right now. Wait a minute, then try again.', invalid_json:'Claude’s answer couldn’t be read. Try again, or paste less text.', prompt_too_large:'That email is too long. Paste just the invite part.'})[e && e.code] || 'Something went wrong reading the invite. Try again.';
+  } finally { S.tryBusy = false; render(); showCard('try-card', true); }
+}
+
+/* ---------- Estimating history: data model ---------- */
+const EST_COLS = ['section','location','name','count','qty','uom','draftHrs','fabHrs','installHrs','draftCost','materialCost','fabCost','installCost','totalCost','margin','draftPrice','fabPrice','installPrice','totalPrice'];
+const EST_STATUS = ['Budget','Bid submitted','Won','Lost','Not bid'];
+const EST_CHUNK = 700;
+const FAMILY = {PL:'Plastic laminate', SS:'Solid surface', QZ:'Quartz', MB:'Metal', WD:'Wood', WV:'Wood veneer', SSM:'Solid surface', GL:'Glass'};
+function catOf(name){
+  const n = String(name||'').toLowerCase();
+  if (/countertop|counter top|backsplash|splash/.test(n)) return 'Countertops';
+  if (/window sill|\bsill\b/.test(n)) return 'Window sills';
+  if (/panelsupport|panel support/.test(n)) return 'Hardware and accessories';
+  if (/diewall|die wall/.test(n)) return 'Die walls';
+  if (/soffit|panel|3form|textura|cladding|surround|wall cap/.test(n)) return 'Panels, cladding and soffits';
+  if (/cabinet|casework|locker|shelving/.test(n)) return 'Cabinets and casework';
+  if (/cut & add|cut and add|release time|allowance|contingency|escalation/.test(n)) return 'Adjustments and allowances';
+  if (/bracket|lock|grommet|release|support|\bbase\b|hinge|pull/.test(n)) return 'Hardware and accessories';
+  return 'Other';
+}
+function codeOf(name){ const m = String(name||'').match(/^([A-Z]{1,3})-\d+/); return m ? m[0] : ''; }
+function familyOf(name){ const m = String(name||'').match(/^([A-Z]{1,3})-\d+/); return m ? (FAMILY[m[1]] || m[1]) : ''; }
+function roomTypeOf(loc){ return String(loc||'').replace(/^\s*\d+[A-Z]?\s+/,'').replace(/\s+/g,' ').trim(); }
+function estRows(id){
+  const out = [];
+  for (const [cid, c] of S.estRows){ if (c.estimate === id && Array.isArray(c.rows)) out.push([c.k||0, c.rows]); }
+  out.sort((a,b) => a[0]-b[0]);
+  return out.flatMap(x => x[1]);
+}
+function estList(){ return [...S.estimates.entries()].map(([id, e]) => ({id, ...e})).sort((a,b) => String(b.date||'').localeCompare(String(a.date||''))); }
+function lines(filter){
+  const f = filter || {}; const res = [];
+  const ids = Array.isArray(f.estimate_ids) && f.estimate_ids.length ? new Set(f.estimate_ids.map(String)) : null;
+  for (const e of estList()){
+    if (ids && !ids.has(e.id)) continue;
+    if (f.segment && !String(e.segment||'').toLowerCase().includes(String(f.segment).toLowerCase())) continue;
+    if (f.status && String(e.status||'').toLowerCase() !== String(f.status).toLowerCase()) continue;
+    if (f.date_from && String(e.date||'') < String(f.date_from)) continue;
+    if (f.date_to && String(e.date||'') > String(f.date_to)) continue;
+    for (const r of estRows(e.id)){
+      const o = {}; EST_COLS.forEach((c, i) => o[c] = r[i]);
+      o.category = catOf(o.name); o.code = codeOf(o.name); o.family = familyOf(o.name); o.roomType = roomTypeOf(o.location); o.estimate = e.id; o.estimateName = e.project || e.name;
+      const words = Array.isArray(f.text_contains) ? f.text_contains : (f.text_contains ? [f.text_contains] : []);
+      if (words.some(w => !String(o.name||'').toLowerCase().includes(String(w).toLowerCase()))) continue;
+      if (f.material_family && String(o.family).toLowerCase() !== String(f.material_family).toLowerCase()) continue;
+      if (f.category && o.category.toLowerCase() !== String(f.category).toLowerCase()) continue;
+      if (f.uom && String(o.uom||'').toUpperCase() !== String(f.uom).toUpperCase()) continue;
+      if (f.room_type_contains && !o.roomType.toLowerCase().includes(String(f.room_type_contains).toLowerCase())) continue;
+      if (f.section && !String(o.section||'').toLowerCase().includes(String(f.section).toLowerCase())) continue;
+      res.push(o);
+    }
+  }
+  return res;
+}
+const r2 = n => Math.round((Number(n)||0)*100)/100;
+function summarize(input){
+  const ls = lines(input); const key = {material_family:o=>o.family||'(no finish code)', category:o=>o.category, uom:o=>o.uom||'(none)', room_type:o=>o.roomType||'(no room)', name:o=>o.name, estimate:o=>o.estimateName, location:o=>o.estimateName+' · '+o.location, section:o=>o.section||'(none)'}[input.group_by] || (() => 'All matching lines');
+  const g = new Map();
+  for (const o of ls){ const k = key(o); if (!g.has(k)) g.set(k, {group:k, lines:0, count:0, qty:0, uoms:{}, price:0, cost:0, material:0, fabHrs:0, installHrs:0, draftHrs:0, marginSum:0, ests:new Set()});
+    const a = g.get(k); a.lines++; a.count += +o.count||0; a.qty += +o.qty||0; a.uoms[o.uom||'none'] = (a.uoms[o.uom||'none']||0) + (+o.qty||0); a.price += +o.totalPrice||0; a.cost += +o.totalCost||0; a.material += +o.materialCost||0; a.fabHrs += +o.fabHrs||0; a.installHrs += +o.installHrs||0; a.draftHrs += +o.draftHrs||0; a.marginSum += +o.margin||0; a.ests.add(o.estimateName); }
+  const groups = [...g.values()].sort((a,b) => b.price - a.price).slice(0, 40).map(a => {
+    const units = Object.keys(a.uoms); const one = units.length === 1 ? units[0] : null;
+    return {group:a.group, lines:a.lines, item_count:r2(a.count), quantity_by_unit:Object.fromEntries(Object.entries(a.uoms).map(([u,q]) => [u, r2(q)])),
+      total_price:r2(a.price), total_cost:r2(a.cost), material_cost:r2(a.material), drafting_hours:r2(a.draftHrs), fabrication_hours:r2(a.fabHrs), install_hours:r2(a.installHrs),
+      price_per_unit: one && a.qty ? r2(a.price/a.qty) : null, cost_per_unit: one && a.qty ? r2(a.cost/a.qty) : null, unit: one, average_margin: a.lines ? r2(a.marginSum/a.lines) : null, estimates:[...a.ests]};
+  });
+  return {matching_lines:ls.length, groups, group_count:g.size,
+    note: groups.some(x => !x.unit) ? 'Some groups mix units (LF, SF, EA); per-unit figures are only given when a group has one unit. Filter by uom to get a per-unit figure.' : undefined,
+    estimates_searched: estList().length};
+}
+function roomCosts(input){
+  const ls = lines(input); const m = new Map();
+  for (const o of ls){ const k = o.estimate + '|' + o.location; if (!m.has(k)) m.set(k, {estimate:o.estimateName, room:o.location, room_type:o.roomType, price:0, cost:0, lines:0}); const a = m.get(k); a.price += +o.totalPrice||0; a.cost += +o.totalCost||0; a.lines++; }
+  const rooms = [...m.values()].map(a => ({...a, price:r2(a.price), cost:r2(a.cost)}));
+  const stat = arr => { if (!arr.length) return null; const s = [...arr].sort((a,b)=>a-b); const mid = s.length/2; return {average:r2(s.reduce((x,y)=>x+y,0)/s.length), median:r2(s.length%2 ? s[Math.floor(mid)] : (s[mid-1]+s[mid])/2), min:r2(s[0]), max:r2(s[s.length-1])}; };
+  return {rooms_found:rooms.length, price_per_room:stat(rooms.map(r=>r.price)), cost_per_room:stat(rooms.map(r=>r.cost)), estimates:[...new Set(rooms.map(r=>r.estimate))], rooms:rooms.sort((a,b)=>b.price-a.price).slice(0,40)};
+}
+function inviteRows(input){
+  const f = input || {}; const out = [];
+  for (const i of sortedInvites()){
+    const sc = screen(i), d = S.decisions.get(i.id);
+    if (f.gc_contains && !norm((sc.gc ? sc.gc.g.name + ' ' : '') + i.gcText).includes(norm(f.gc_contains))) continue;
+    if (f.tier && String(sc.tier).toLowerCase() !== String(f.tier).toLowerCase()) continue;
+    if (f.recommendation && REC[sc.rec].pill.toLowerCase() !== String(f.recommendation).toLowerCase()) continue;
+    if (f.due_from && (!i.due || i.due < f.due_from)) continue;
+    if (f.due_to && (!i.due || i.due > f.due_to)) continue;
+    if (f.text_contains && !`${i.project} ${i.description} ${i.location} ${i.package}`.toLowerCase().includes(String(f.text_contains).toLowerCase())) continue;
+    out.push({project:i.project, gc:sc.gc ? sc.gc.g.name : i.gcText, tier:sc.tier, screener:REC[sc.rec].pill, why:sc.why, flags:sc.flags.map(x=>x.t), received:i.received, bid_due:i.due ? i.due + (i.dueTime ? ' ' + i.dueTime : '') : 'Not stated', location:i.location, platform:i.platform, package:i.package, stage:i.stage, segment:i.segment, description:i.description, sandbox_decision:d ? DEC[d.decision] + (d.stage ? ' · ' + d.stage : '') : null, team_past_decision:i.actual ? i.actual.outcome + ': ' + (i.actual.note||'') : null, archived:!!i.archived});
+  }
+  return {invites_found:out.length, invites:out.slice(0,40)};
+}
+function gcInfo(input){
+  const q = norm(input && input.name); const counts = gcCounts();
+  const hits = [...S.gcs.entries()].filter(([id,g]) => norm(g.name + ' ' + (g.aka||'')).includes(q)).slice(0,8);
+  return hits.map(([id,g]) => ({name:g.name, also_appears_as:g.aka, tier:g.tier||'No tier', why:g.why, notes:g.notes, trend:g.trend, calculator_score:g.score, open_question:g.check, invites_in_sandbox:counts[id]||0}));
+}
+const ASK_TOOLS = () => [
+  {name:'list_estimates', description:'Lists every uploaded estimate: id, project, segment, status, date, GC, number of lines, total price and total cost. Call first for any estimating question.', execute:() => estList().map(e => ({id:e.id, project:e.project, segment:e.segment, status:e.status, date:e.date, gc:e.gc, lines:e.lines, total_price:e.totalPrice, total_cost:e.totalCost, notes:e.notes}))},
+  {name:'summarize_estimate_lines', description:'Filters line items across uploaded estimates and returns totals per group: quantity by unit (LF, SF, EA), total price, total cost, material cost, labor hours, and price and cost per unit when the group has a single unit. Item names look like "PL-1 Base cabinet with 2 doors" (PL = plastic laminate, SS = solid surface). Categories: Cabinets and casework, Countertops, Window sills, Die walls, Panels, cladding and soffits, Hardware and accessories, Adjustments and allowances (lump sums like \"Cut & Add\" and \"Release Time\"), Other.',
+    inputSchema:{type:'object', properties:{estimate_ids:{type:'array', items:{type:'string'}}, segment:{type:'string'}, status:{type:'string'}, date_from:{type:'string', description:'YYYY-MM-DD, compared with the estimate date'}, date_to:{type:'string'}, text_contains:{type:'array', items:{type:'string'}, description:'words that must all appear in the item name'}, material_family:{type:'string', description:'Plastic laminate, Solid surface, Quartz, Metal'}, category:{type:'string'}, uom:{type:'string', enum:['LF','SF','EA']}, room_type_contains:{type:'string', description:'e.g. EXAM, NURSE STATION'}, section:{type:'string', description:'e.g. Base Bid or an alternate'}, group_by:{type:'string', enum:['material_family','category','uom','room_type','name','estimate','location','section']}}}, execute:summarize},
+  {name:'room_costs', description:'Totals price and cost per room (an estimate "Location", such as "263 EXAM"), with average, median, min and max per room. Use for cost-per-room questions. Filter rooms with room_type_contains (room number removed), e.g. "EXAM" or "PATIENT".',
+    inputSchema:{type:'object', properties:{room_type_contains:{type:'string'}, estimate_ids:{type:'array', items:{type:'string'}}, segment:{type:'string'}, status:{type:'string'}, date_from:{type:'string'}, date_to:{type:'string'}, category:{type:'string'}}}, execute:roomCosts},
+  {name:'list_bid_invites', description:'Lists bid invites in the screener with the GC, tier, screener recommendation, flags, bid due date, location, platform, any decision made in the sandbox, and the team\'s past decision where known.',
+    inputSchema:{type:'object', properties:{gc_contains:{type:'string'}, tier:{type:'string', enum:['Top','Mid','Low','Watch','Do Not Bid','No tier','No match']}, recommendation:{type:'string', enum:['Bid review','Recommend decline','Needs a look','Not an invite']}, due_from:{type:'string', description:'YYYY-MM-DD'}, due_to:{type:'string'}, text_contains:{type:'string'}}}, execute:inviteRows},
+  {name:'gc_lookup', description:'Looks up general contractors in the GC directory by name: tier, why, notes, trend, calculator score, open questions and how many invites they sent.', inputSchema:{type:'object', properties:{name:{type:'string'}}, required:['name']}, execute:gcInfo},
+];
+function showAnswer(focus){ setTimeout(() => { const c = document.getElementById('answer-card'); if (!c) return; c.scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block:'start'}); if (focus) c.focus({preventScroll:true}); }, 60); }
+async function ask(question){
+  const q = String(question||'').trim(); if (!q || S.askBusy) return;
+  S.askBusy = true; S.askLive = ''; S.askTrace = []; S.askErr = ''; S.askQ = q; S.askDraft = ''; render(); showAnswer();
+  const ctl = new AbortController(); S.askCtl = ctl;
+  const caps = await S.sample.limits().catch(() => null);
+  const tools = ASK_TOOLS().map(t => ({...t, execute:(input) => { const r = t.execute(input || {}); S.askTrace.push({tool:t.name, input}); const tr = document.getElementById('ask-trace'); if (tr) tr.textContent = 'Looked at: ' + S.askTrace.map(x => x.tool.replace(/_/g,' ')).join(', '); return JSON.parse(JSON.stringify(r)); }}));
+  const useTools = !!(caps && caps.tools);
+  const intro = `You answer questions for Concepts in Millwork, a commercial architectural millwork company in Colorado Springs. The sales team asks about bid invites and general contractors; the estimating team asks about past estimates exported from Innergy. Today is ${today()}.
+Rules:
+- Use only numbers from the data${useTools ? ' your tools return. Call the tools first and write nothing until you have the numbers' : ' below'}. Never invent or estimate a figure.
+- Always state units. If the question asks for a unit the data doesn't use (for example per linear foot when cabinets are measured in square feet), say so plainly and give the closest figure the data supports.
+- Say how many estimates, lines or rooms the figure is based on, and name the estimates. If there is too little data to answer well, say so.
+- Dates: "the last year" means estimate dates in the past 12 months.
+- Reply in plain text: a direct answer first, then up to five short lines of supporting detail. Dollars rounded to whole dollars, rates to cents. No tables, no markdown headings.`;
+  let input = intro + '\n\nQuestion: ' + q;
+  if (!useTools){
+    const ctx = {estimates:ASK_TOOLS()[0].execute(), by_category_and_unit:['category','uom'].map(g => summarize({group_by:g})), invites:inviteRows({}).invites.slice(0,30)};
+    input = intro + '\n\nData (JSON):\n' + JSON.stringify(ctx).slice(0, 50000) + '\n\nQuestion: ' + q;
+  }
+  try {
+    const {text} = await S.sample(input, {signal:ctl.signal, tools:useTools ? tools : undefined, cache:false, onText:({text}) => { S.askLive = text; const el = document.getElementById('ask-live'); if (el) el.textContent = text; }});
+    S.askLog.unshift({q, a:text, trace:S.askTrace.map(x => x.tool)});
+  } catch (e) {
+    const msg = e && e.code === 'cancelled' ? 'You stopped this answer. Press “Get answer” to try again.' : ({not_granted:'Answers aren’t allowed in this view, so this question couldn’t be answered.', rate_limited:'Too many questions at once. Wait a minute, then press “Get answer” again.'})[e && e.code] || 'Something went wrong while answering. Press “Get answer” to try again.';
+    S.askLog.unshift({q, a:(e && e.text ? e.text + '\n\n' : '') + msg, trace:[], err:true, rated:true}); S.askErr = '';
+  } finally { S.askBusy = false; S.askCtl = null; S.askLive = ''; render(); showAnswer(true); }
+}
+function viewAsk(){
+  const est = estList(); const latest = !S.askBusy && S.askLog[0]; const older = S.askBusy ? S.askLog : S.askLog.slice(1);
+  return head('Ask a question','Type a question about bid invites, general contractors or past estimates, then press “Get answer”. Your answer appears right below the box.')
+  + (S.sample === null ? `<p class="note">Answers aren’t available in this view.</p>` : '')
+  + `<form class="card" data-act="askform">
+      <div class="field"><label for="ask-q" style="font-size:14px">Your question</label><textarea id="ask-q" style="min-height:96px;font-size:17px" placeholder="Type your question here">${esc(S.askDraft||'')}</textarea></div>
+      <div class="row"><button class="btn primary" type="submit" style="font-size:17px;padding:10px 22px;min-height:46px" ${S.askBusy||!S.sample?'disabled':''}>${S.askBusy ? 'Working on it…' : 'Get answer'}</button>
+      <span class="meta">The first time, you may be asked to allow Claude to answer.</span></div>
+    </form>
+    ${S.askBusy ? `<section class="card" id="answer-card" tabindex="-1" style="border:2px solid var(--accent);gap:12px">
+        <h2 style="font-size:20px">Your answer</h2>
+        <p class="meta">You asked: ${esc(S.askQ)}</p>
+        <p style="font-size:17px;font-weight:600;color:var(--accent);margin:0">Working on your answer. This usually takes 30 to 60 seconds.</p>
+        <div id="ask-live" style="white-space:pre-wrap;font-size:17px;line-height:1.55">${esc(S.askLive)}</div>
+        <div class="row"><button class="btn" type="button" data-act="askstop">Stop</button></div>
+      </section>` : ''}
+    ${S.askErr && !S.askBusy && !(latest && latest.err) ? `<section class="card" id="answer-card" tabindex="-1" style="border:2px solid var(--decline)"><h2 style="font-size:20px">Your answer</h2><p style="font-size:17px;margin:0">${esc(S.askErr)}</p></section>` : ''}
+    ${latest ? `<section class="card" id="answer-card" tabindex="-1" style="border:2px solid var(--accent);gap:12px">
+        <h2 style="font-size:20px">Your answer</h2>
+        <p class="meta">You asked: ${esc(latest.q)}</p>
+        <div style="white-space:pre-wrap;font-size:17px;line-height:1.55">${esc(latest.a)}</div>
+        <div class="row">${latest.rated ? `<span class="pill ok">Thank you. Your response was saved.</span>` : `<span>Was this answer right?</span><button class="btn" type="button" data-act="askrate" data-n="0" data-r="Right">Yes</button><button class="btn" type="button" data-act="askrate" data-n="0" data-r="Not quite">No</button>`}
+        <button class="btn primary" type="button" data-act="asknew">Ask another question</button></div>
+      </section>` : ''}
+    ${!S.askBusy && !latest && !S.askErr ? `<div class="empty" style="font-size:15px">Your answer will appear here. It can use ${est.length} saved estimate${est.length===1?'':'s'} and ${S.invites.size} bid invites.</div>` : ''}
+    ${older.length ? `<details class="card"><summary style="cursor:pointer;font-weight:700">Earlier questions (${older.length})</summary><div class="group" style="margin-top:10px">${older.map(x => `<div class="fbitem" style="border-top:1px solid var(--line);padding-top:10px"><b>${esc(x.q)}</b><div style="white-space:pre-wrap">${esc(x.a)}</div></div>`).join('')}</div></details>` : ''}`;
+}
+function unitTable(){
+  const m = new Map();
+  for (const o of lines({})){ const k = o.category; if (!m.has(k)) m.set(k, {LF:0, SF:0, EA:0, other:0}); const a = m.get(k); if (a[o.uom] !== undefined) a[o.uom]++; else a.other++; }
+  if (!m.size) return '';
+  return `<details class="card"><summary style="cursor:pointer;font-weight:700">How each item type is measured</summary><p class="meta">Per-unit answers only make sense in the unit the estimate uses. In this data, cabinets are measured in square feet and countertops in linear feet.</p>
+  <div class="tablebox"><table><thead><tr><th>Item type</th><th>LF lines</th><th>SF lines</th><th>EA lines</th></tr></thead><tbody>${[...m.entries()].sort((a,b)=>a[0].localeCompare(b[0])).map(([k,a]) => `<tr><td>${esc(k)}</td><td class="num">${a.LF}</td><td class="num">${a.SF}</td><td class="num">${a.EA}</td></tr>`).join('')}</tbody></table></div></details>`;
+}
+function viewEstimates(){
+  const note = S.db === null ? `<p class="note">Shared saving isn’t available in this view, so estimates can’t be stored here.</p>` : '';
+  const up = S.estUpload; const list = estList(); const segs = settings().segments.map(s => s.name);
+  return head('Past estimates','Save estimates exported from Innergy here, then ask questions about them on “Ask a question”.', ['Export an estimate from Innergy as an Excel file.', 'Below, press the button to choose that file.', 'Check the project name, date and type, then press “Save estimate”.', 'Go to “5. Ask a question” to ask about it.'])
+  + note
+  + `<p class="note">Only people this page is shared with at your company can see these estimates. Check with IT before loading the full estimate history.</p>
+    <div class="card"><h3>Add an estimate</h3>
+      <div class="field"><label for="est-file">Choose the Innergy export file (.xlsx or .csv)</label><input type="file" id="est-file" accept=".xlsx,.xls,.csv" data-act="estfile"></div>
+      ${S.estErr ? `<p class="checktext">${esc(S.estErr)}</p>` : ''}
+      ${up ? `<form class="group" data-act="estsave">
+        <div class="kv">${kvs([['File', up.file],['Line items', String(up.rows.length)],['Sections', [...new Set(up.rows.map(r => r[0]).filter(Boolean))].join(', ') || 'None'],['Total price', money(up.price)],['Total cost', money(up.cost)],['Rooms', String(new Set(up.rows.map(r => r[1]).filter(Boolean)).size)]])}</div>
+        <div class="twocol">
+          <div class="field"><label for="est-project">Project name</label><input type="text" id="est-project" required value="${esc(up.project||'')}"></div>
+          <div class="field"><label for="est-gc">GC (optional)</label><input type="text" id="est-gc" value="${esc(up.gc||'')}"></div>
+          <div class="field"><label for="est-date">Estimate date</label><input type="date" id="est-date" required value="${esc(up.date||today())}"></div>
+          <div class="field"><label for="est-segment">Type of project (segment)</label><select id="est-segment">${segs.map(s => `<option ${s===up.segment?'selected':''}>${esc(s)}</option>`).join('')}</select></div>
+          <div class="field"><label for="est-status">Stage of the estimate</label><select id="est-status">${EST_STATUS.map(s => `<option ${s===(up.status||'Budget')?'selected':''}>${s}</option>`).join('')}</select></div>
+          <div class="field"><label for="est-notes">Notes</label><input type="text" id="est-notes" value="${esc(up.notes||'')}" placeholder="e.g. 100% CD set, rebid"></div>
+        </div>
+        <p class="meta">Check these details, fix anything that’s wrong, then save.</p>
+        <div class="row"><button class="btn primary" type="submit" ${S.estSaving?'disabled':''}>${S.estSaving?'Saving…':'Save estimate'}</button><button class="btn" type="button" data-act="estcancel">Cancel</button></div>
+      </form>` : ''}
+    </div>
+    ${list.length ? `<h3>Saved estimates (${list.length})</h3><div class="tablebox"><table><thead><tr><th>Project</th><th>Segment</th><th>Status</th><th>Date</th><th>Lines</th><th>Price</th><th>Cost</th><th>Margin</th><th></th></tr></thead><tbody>
+      ${list.map(e => `<tr><td><b>${esc(e.project)}</b>${e.gc ? `<div class="meta">${esc(e.gc)}</div>` : ''}${e.notes ? `<div class="meta">${esc(e.notes)}</div>` : ''}<div class="meta">${esc(e.file||'')}</div></td>
+        <td><select id="seg-${e.id}" data-act="estmeta" data-f="segment" data-id="${e.id}" aria-label="Segment">${segs.map(s => `<option ${s===e.segment?'selected':''}>${esc(s)}</option>`).join('')}</select></td>
+        <td><select id="stat-${e.id}" data-act="estmeta" data-f="status" data-id="${e.id}" aria-label="Status">${EST_STATUS.map(s => `<option ${s===e.status?'selected':''}>${s}</option>`).join('')}</select></td>
+        <td class="num">${esc(e.date||'')}</td><td class="num">${e.lines||0}</td><td class="num">${money(e.totalPrice||0)}</td><td class="num">${money(e.totalCost||0)}</td><td class="num">${e.totalPrice ? Math.round((1 - e.totalCost/e.totalPrice)*1000)/10 + '%' : '—'}</td>
+        <td>${S.estDel === e.id ? `<button class="btn decline" type="button" data-act="estdelyes" data-id="${e.id}">Delete</button><button class="btn" type="button" data-act="estdelno">Keep</button>` : `<button class="btn ghost" type="button" data-act="estdel" data-id="${e.id}">Remove</button>`}</td></tr>`).join('')}
+      </tbody></table></div>` : `<div class="empty">No estimates saved yet. Choose an Innergy export above.</div>`}
+    ${list.length ? `<div class="row"><button class="btn primary" type="button" data-tab="ask" style="font-size:17px;padding:10px 22px;min-height:46px">Ask a question about these estimates</button></div>` : ''}
+    ${unitTable()}`;
+}
+function parseEstimateAoa(aoa){
+  const h = aoa.findIndex(r => r && r.some(c => /^name$/i.test(String(c||'').trim())) && r.some(c => /grand total price/i.test(String(c||''))));
+  if (h < 0) throw new Error('This file doesn’t look like an Innergy estimate export. It needs Name and Grand Total Price columns.');
+  const hdr = aoa[h].map(c => String(c||'').trim().toLowerCase());
+  const find = (re, not) => hdr.findIndex(c => re.test(c) && !(not && not.test(c)));
+  const ix = {origin:find(/origin/), location:find(/^location$/), name:find(/^name$/), count:find(/quant.*count/), qty:find(/quant/, /count/), uom:find(/^uom$|unit of measure/), draftHrs:find(/drafting hours/), fabHrs:find(/fabrication hours/), installHrs:find(/install hours/), draftCost:find(/total drafting cost/), materialCost:find(/material cost/), fabCost:find(/total fabrication cost/), installCost:find(/total install cost/), totalCost:find(/grand total cost/), margin:find(/margin/), draftPrice:find(/total drafting price/), fabPrice:find(/total fabrication price/), installPrice:find(/total install price/), totalPrice:find(/grand total price/)};
+  const num = v => { const n = Number(String(v ?? '').replace(/[$,%\s]/g,'')); return isFinite(n) ? n : 0; };
+  let section = ''; const rows = [];
+  for (const r of aoa.slice(h+1)){
+    if (!r) continue; const nm = ix.name >= 0 ? String(r[ix.name] ?? '').trim() : '';
+    const org = ix.origin >= 0 ? String(r[ix.origin] ?? '').trim() : '';
+    if (org && !nm){ section = org; continue; }
+    if (!nm) continue;
+    rows.push([section, ix.location>=0 ? String(r[ix.location] ?? '').trim() : '', nm, num(r[ix.count]), num(r[ix.qty]), ix.uom>=0 ? String(r[ix.uom] ?? '').trim().toUpperCase() : '',
+      num(r[ix.draftHrs]), num(r[ix.fabHrs]), num(r[ix.installHrs]), num(r[ix.draftCost]), num(r[ix.materialCost]), num(r[ix.fabCost]), num(r[ix.installCost]), num(r[ix.totalCost]), num(r[ix.margin]), num(r[ix.draftPrice]), num(r[ix.fabPrice]), num(r[ix.installPrice]), num(r[ix.totalPrice])].map(v => typeof v === 'number' ? Math.round(v*10000)/10000 : v));
+  }
+  if (!rows.length) throw new Error('No line items were found under the header row.');
+  return rows;
+}
+function readEstimateFile(file){
+  S.estErr = ''; S.estUpload = null;
+  const rd = new FileReader();
+  rd.onload = () => {
+    try {
+      let aoa;
+      if (/\.csv$/i.test(file.name)){
+        aoa = String(rd.result).split(/\r?\n/).map(line => { const out = []; let cur = '', q = false; for (const ch of line){ if (ch === '"') q = !q; else if (ch === ',' && !q){ out.push(cur); cur=''; } else cur += ch; } out.push(cur); return out; });
+      } else {
+        if (!window.XLSX) throw new Error('The spreadsheet reader didn’t load. Save the file as .csv and try again.');
+        const wb = XLSX.read(new Uint8Array(rd.result), {type:'array'});
+        aoa = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, raw:true, defval:null});
+      }
+      const rows = parseEstimateAoa(aoa);
+      const hc = rows.some(r => /exam|patient|nurse|trauma|med prep|ed lab/i.test(r[1]));
+      S.estUpload = {file:file.name, rows, price:rows.reduce((a,r)=>a+r[18],0), cost:rows.reduce((a,r)=>a+r[13],0), project:file.name.replace(/\.(xlsx|xls|csv)$/i,'').replace(/[_]+/g,' '), date:today(), segment: hc ? 'Large Healthcare' : '', status:'Budget'};
+    } catch (e) { S.estErr = e.message || 'That file couldn’t be read.'; }
+    render();
+  };
+  if (/\.csv$/i.test(file.name)) rd.readAsText(file); else rd.readAsArrayBuffer(file);
+}
+async function saveEstimate(){
+  const up = S.estUpload; if (!up || !S.db) return;
+  const meta = {project:$('#est-project').value.trim(), gc:$('#est-gc').value.trim(), date:$('#est-date').value, segment:$('#est-segment').value, status:$('#est-status').value, notes:$('#est-notes').value.trim(), file:up.file, lines:up.rows.length, totalPrice:Math.round(up.price*100)/100, totalCost:Math.round(up.cost*100)/100, uploadedBy:by(), uploadedAt:new Date().toISOString(), columns:EST_COLS};
+  if (!meta.project) return;
+  const id = 'est-' + slug(meta.project).slice(0,40) + '-' + Date.now().toString(36);
+  S.estSaving = true; render();
+  await write(async () => {
+    for (let k = 0; k * EST_CHUNK < up.rows.length; k++) await S.db.doc('estrows/' + id + '-' + k).set({estimate:id, k, rows:up.rows.slice(k*EST_CHUNK, (k+1)*EST_CHUNK).map(r => Object.fromEntries(EST_COLS.map((c,i) => [i, r[i]])))});
+    await S.db.doc('estimates/' + id).set(meta);
+  }, 'Estimate saved. You can ask about it on “Ask a question”.');
+  S.estSaving = false; S.estUpload = null; render();
+}
+async function deleteEstimate(id){
+  const chunks = [...S.estRows.entries()].filter(([cid, c]) => c.estimate === id).map(([cid]) => cid);
+  S.estDel = null; S.estimates.delete(id); render();
+  await write(async () => { await S.db.doc('estimates/' + id).delete(); for (const c of chunks) await S.db.doc('estrows/' + c).delete(); }, 'Estimate removed.');
+}
+
+/* ---------- Read files: .eml, .txt, .pdf ---------- */
+let pdfReady = null;
+function loadPdfJs(){
+  if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+  if (pdfReady) return pdfReady;
+  pdfReady = new Promise((ok, no) => { const s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    s.onload = () => { try { window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; ok(window.pdfjsLib); } catch (e) { no(e); } };
+    s.onerror = () => { pdfReady = null; no(new Error('The PDF reader didn’t load.')); }; document.head.append(s); });
+  return pdfReady;
+}
+async function pdfToText(buf){
+  const lib = await loadPdfJs(); const doc = await lib.getDocument({data:buf}).promise; const out = [];
+  for (let p = 1; p <= Math.min(doc.numPages, 8); p++){ const pg = await doc.getPage(p); const tc = await pg.getTextContent(); let line = ''; let lastY = null;
+    for (const it of tc.items){ const y = it.transform ? Math.round(it.transform[5]) : null; if (lastY !== null && y !== lastY){ out.push(line); line = ''; } line += it.str + (it.hasEOL ? '\n' : ' '); lastY = y; }
+    out.push(line); }
+  return out.join('\n').replace(/[ \t]+/g,' ').replace(/\n\s*\n+/g,'\n').trim().slice(0, 20000);
+}
+function readFileAs(file, how){ return new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = () => no(r.error); how === 'buf' ? r.readAsArrayBuffer(file) : r.readAsText(file); }); }
+async function fileToText(file){
+  if (/\.pdf$/i.test(file.name) || file.type === 'application/pdf') return pdfToText(await readFileAs(file, 'buf'));
+  const raw = String(await readFileAs(file, 'text'));
+  if (/\.eml$/i.test(file.name) || /^(from|received|return-path|mime-version|delivered-to):/im.test(raw.slice(0, 2000))) return emlToText(raw);
+  return raw.slice(0, 20000);
+}
+
+/* ---------- Add several invites at once ---------- */
+async function bulkInvites(files, where){
+  where = where || 'try';
+  files = [...files].filter(f => /\.(eml|txt|pdf)$/i.test(f.name)).slice(0, 25);
+  if (!files.length){ toast('Choose .eml, .pdf or .txt files.'); return; }
+  if (!S.sample || !S.db){ toast('Adding invites needs the online version on claude.ai.'); return; }
+  S.bulk = {where, total:files.length, done:0, current:'', added:[], skipped:[], failed:[], busy:true}; render(); showCard(where + '-bulk-card');
+  for (const f of files){
+    S.bulk.current = f.name; render();
+    try {
+      const text = await fileToText(f);
+      if (!text || text.length < 40) throw new Error('No readable text was found in this file.');
+      const r = await readInvite(text);
+      const key = norm(r.project) + '|' + norm(r.gcText);
+      const dupe = [...S.invites.values()].some(o => norm(o.project) + '|' + norm(o.gcText) === key && (o.due||'') === (r.due||''));
+      if (dupe) S.bulk.skipped.push({name:f.name, project:r.project});
+      else {
+        const nid = 'upload-' + slug(r.project).slice(0, 40) + '-' + Date.now().toString(36);
+        const doc = {...r, source:'uploaded', file:f.name, addedBy:by(), received:r.received || today()};
+        S.invites.set(nid, doc); await S.db.doc('invites/' + nid).set(doc);
+        S.bulk.added.push({name:f.name, project:r.project});
+      }
+    } catch (e) { S.bulk.failed.push({name:f.name, msg:inviteErr(e)}); }
+    S.bulk.done++; render();
+  }
+  S.bulk.busy = false; S.bulk.current = ''; render(); showCard(where + '-bulk-card', true);
+  const fi = document.getElementById(where + '-bulk-file'); if (fi) fi.value = '';
+}
+function inviteErr(e){
+  return ({not_granted:'Claude wasn’t allowed to read it in this view.', rate_limited:'Too many requests right now. Wait a minute, then try this one again.', invalid_json:'Claude couldn’t find a bid invite in it.', prompt_too_large:'The file is too long.', quota_exceeded:'Storage is full.'})[e && e.code] || (e && e.message) || 'Something went wrong reading it.';
+}
+function bulkCard(where){
+  where = where || 'try'; const b = S.bulk && S.bulk.where === where ? S.bulk : null; const home = where === 'home';
+  const intro = `<h3>${home ? 'Add new invites' : 'Add several invites at once'}</h3>
+      <p class="meta" style="margin:0">Save invite emails from Outlook (drag them from your inbox to your desktop) or save invite PDFs, then choose them here. You can pick several at once, up to 25. ${home ? 'To paste an email instead, use “2. Check an invite”.' : 'Each one is read and added to “Today’s invites”.'}</p>
+      <div class="field"><label for="${where}-bulk-file">Choose invite files (.eml, .pdf or .txt)</label><input type="file" id="${where}-bulk-file" multiple accept=".eml,.pdf,.txt,message/rfc822,application/pdf" data-act="bulkfiles" data-where="${where}" ${S.bulk && S.bulk.busy || !S.sample ? 'disabled' : ''}></div>
+      ${!S.sample && S.sample !== undefined && home ? '<p class="meta" style="margin:0">Adding invites needs the online version on claude.ai.</p>' : ''}`;
+  if (!b) return `<div class="card" id="${where}-bulk-card"${home ? ' style="border:2px solid var(--accent)"' : ''}>${intro}</div>`;
+  const list = (xs, label, cls) => xs.length ? `<div><b>${label} (${xs.length})</b><ul style="margin:4px 0 0;padding-left:20px">${xs.map(x => `<li>${esc(x.project || x.name)}${x.msg ? ` <span class="${cls}">: ${esc(x.msg)}</span>` : x.project ? ` <span class="meta">(${esc(x.name)})</span>` : ''}</li>`).join('')}</ul></div>` : '';
+  return `<div class="card" id="${where}-bulk-card" tabindex="-1" style="border:2px solid var(--accent);gap:10px">${intro}
+    ${b.busy ? `<p style="font-size:17px;font-weight:600;color:var(--accent);margin:0">Reading ${b.done + 1} of ${b.total}: ${esc(b.current)}. Keep this page open.</p>` : `<p style="font-size:17px;font-weight:600;margin:0">Done. ${b.added.length} added${b.skipped.length ? `, ${b.skipped.length} already there` : ''}${b.failed.length ? `, ${b.failed.length} couldn’t be read` : ''}.</p>`}
+    ${list(b.added, 'Added', 'meta')}${list(b.skipped, 'Already on Today’s invites, skipped', 'meta')}${list(b.failed, 'Couldn’t be read', 'checktext')}
+    ${!b.busy && b.added.length ? `<div class="row">${home ? '' : '<button class="btn primary" type="button" data-tab="digest">Go to Today’s invites</button>'}<button class="btn" type="button" data-act="bulkclear">Clear this list</button></div>` : !b.busy ? `<div class="row"><button class="btn" type="button" data-act="bulkclear">Clear this list</button></div>` : ''}
+  </div>`;
+}
+
+/* ---------- Import a GC list from a spreadsheet ---------- */
+function normTier(v){
+  const t = String(v||'').trim().toLowerCase().replace(/[^a-z ]/g,'');
+  if (!t) return '';
+  if (/^(do not bid|dnb|no bid|dont bid|do not)/.test(t)) return 'Do Not Bid';
+  for (const x of ['Top','Mid','Low','Watch']) if (t.startsWith(x.toLowerCase())) return x;
+  if (/^(high|a|tier 1|1)$/.test(t)) return 'Top';
+  if (/^(medium|b|tier 2|2)$/.test(t)) return 'Mid';
+  if (/^(c|tier 3|3)$/.test(t)) return 'Low';
+  return null;
+}
+function parseGcSheet(aoa){
+  const h = aoa.findIndex(r => r && r.some(c => /^(gc|gc name|name|general contractor|contractor|company)$/i.test(String(c||'').trim())));
+  if (h < 0) throw new Error('Couldn’t find a column called “GC name”. Use the GC list template, or name the first column “GC name”.');
+  const hdr = aoa[h].map(c => String(c||'').trim().toLowerCase());
+  const col = re => hdr.findIndex(c => re.test(c));
+  const ix = {name:col(/^(gc|gc name|name|general contractor|contractor|company)$/), tier:col(/tier|rank|status/), aka:col(/other name|aka|also|alias/), domains:col(/domain|email/), notes:col(/note/), why:col(/why|reason/), trend:col(/trend/)};
+  const out = [], bad = [];
+  for (const r of aoa.slice(h + 1)){
+    if (!r) continue; const name = String(r[ix.name] ?? '').trim(); if (!name) continue;
+    const rawTier = ix.tier >= 0 ? r[ix.tier] : ''; const tier = normTier(rawTier);
+    if (tier === null) bad.push(`${name} (“${rawTier}”)`);
+    const g = {name, tier: tier || ''};
+    for (const k of ['aka','domains','notes','why']) if (ix[k] >= 0 && String(r[ix[k]] ?? '').trim()) g[k] = String(r[ix[k]]).trim();
+    if (ix.trend >= 0 && TRENDS.includes(String(r[ix.trend] ?? '').trim())) g.trend = String(r[ix.trend]).trim();
+    out.push(g);
+  }
+  if (!out.length) throw new Error('No GC names were found under the header row.');
+  return {rows:out, bad};
+}
+async function readGcFile(file){
+  S.gcImport = null; S.gcImportErr = '';
+  try {
+    let aoa;
+    if (/\.csv$/i.test(file.name)){
+      aoa = String(await readFileAs(file, 'text')).split(/\r?\n/).map(line => { const o = []; let cur = '', q = false; for (const ch of line){ if (ch === '"') q = !q; else if (ch === ',' && !q){ o.push(cur); cur = ''; } else cur += ch; } o.push(cur); return o; });
+    } else {
+      if (!window.XLSX) throw new Error('The spreadsheet reader didn’t load. Save the file as .csv and try again.');
+      const wb = XLSX.read(new Uint8Array(await readFileAs(file, 'buf')), {type:'array'});
+      aoa = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, raw:false, defval:null});
+    }
+    const {rows, bad} = parseGcSheet(aoa);
+    const byName = new Map([...S.gcs.entries()].map(([id, g]) => [norm(g.name), id]));
+    const plan = rows.map(g => ({g, id: byName.get(norm(g.name)) || null}));
+    S.gcImport = {file:file.name, plan, bad, added:plan.filter(p => !p.id).length, updated:plan.filter(p => p.id).length};
+  } catch (e) { S.gcImportErr = e.message || 'That file couldn’t be read.'; }
+  render(); showCard('gc-import');
+}
+async function applyGcImport(){
+  const imp = S.gcImport; if (!imp || !S.db) return;
+  S.gcImporting = true; render();
+  const now = new Date().toISOString(); const used = new Set(S.gcs.keys());
+  await write(async () => {
+    for (const {g, id} of imp.plan){
+      if (id){ const patch = {name:g.name, updatedBy:by(), updatedAt:now}; for (const k of ['tier','aka','domains','notes','why','trend']) if (g[k]) patch[k] = g[k];
+        S.gcs.set(id, {...S.gcs.get(id), ...patch}); await S.db.doc('gcs/' + id).update(patch); }
+      else { let nid = slug(g.name); while (used.has(nid)) nid += '-2'; used.add(nid);
+        const doc = {name:g.name, aka:g.aka||'', domains:g.domains||'', tier:g.tier||'', why:g.why||'Imported from a spreadsheet', notes:g.notes||'', trend:g.trend||'', revisit:'', score:null, check:'', updatedBy:by(), updatedAt:now};
+        S.gcs.set(nid, doc); await S.db.doc('gcs/' + nid).set(doc); }
+    }
+  }, `GC list imported: ${imp.added} added, ${imp.updated} updated.`);
+  S.gcImporting = false; S.gcImport = null; const fi = document.getElementById('gc-file'); if (fi) fi.value = ''; render();
+}
+function gcImportCard(open){
+  const imp = S.gcImport;
+  const body = `<p class="meta" style="margin:0">Use a spreadsheet (.xlsx or .csv) with a “GC name” column and a “Tier” column (Top, Mid, Low, Watch or Do Not Bid). Optional columns: “Other names”, “Email domains”, “Notes”. The GC list template in the repository is already set up this way. GCs already on the list are updated, not doubled.</p>
+      <div class="field"><label for="gc-file">Choose the spreadsheet</label><input type="file" id="gc-file" accept=".xlsx,.xls,.csv" data-act="gcfile"></div>
+      ${S.gcImportErr ? `<p class="checktext">${esc(S.gcImportErr)}</p>` : ''}
+      ${imp ? `<div class="group" style="gap:8px"><p style="font-size:16px;margin:0">Found <b>${imp.plan.length}</b> GCs in ${esc(imp.file)}: <b>${imp.added}</b> new and <b>${imp.updated}</b> already on the list.</p>
+        ${imp.bad.length ? `<p class="checktext" style="margin:0">These tiers weren’t recognized, so they’ll come in with no tier: ${esc(imp.bad.slice(0,8).join(', '))}${imp.bad.length > 8 ? '…' : ''}</p>` : ''}
+        <div class="tablebox" style="max-height:240px;overflow:auto"><table><thead><tr><th>GC</th><th>Tier</th><th></th></tr></thead><tbody>${imp.plan.slice(0,200).map(p => `<tr><td>${esc(p.g.name)}</td><td>${esc(p.g.tier || 'No tier')}</td><td class="meta">${p.id ? 'Update' : 'New'}</td></tr>`).join('')}</tbody></table></div>
+        <div class="row"><button class="btn primary" type="button" data-act="gcimportyes" ${S.gcImporting?'disabled':''}>${S.gcImporting ? 'Importing…' : `Import ${imp.plan.length} GCs`}</button><button class="btn" type="button" data-act="gcimportno">Cancel</button></div></div>` : ''}`;
+  return open || imp || S.gcImportErr
+    ? `<section class="card" id="gc-import" tabindex="-1" style="${S.gcs.size ? '' : 'border:2px solid var(--accent);'}gap:10px"><h3>Import your GC list from a spreadsheet</h3>${body}</section>`
+    : `<details class="card" id="gc-import"><summary style="cursor:pointer;font-weight:700">Import or update GCs from a spreadsheet</summary><div class="group" style="margin-top:8px;gap:10px">${body}</div></details>`;
+}
+
+/* ---------- Archive ---------- */
+function setArchived(ids, on){
+  ids = ids.filter(id => S.invites.has(id)); if (!ids.length) return;
+  const at = new Date().toISOString(); const patch = on ? {archived:true, archivedAt:at, archivedBy:by()} : {archived:false};
+  for (const id of ids) S.invites.set(id, {...S.invites.get(id), ...patch});
+  if (S.openId && ids.includes(S.openId) && on) S.openId = null;
+  render();
+  write(() => Promise.all(ids.map(id => S.db.doc('invites/' + id).update(patch))), on ? (ids.length === 1 ? 'Moved to the archive.' : `${ids.length} invites moved to the archive.`) : 'Restored to Today’s invites.');
+}
+function outcomeOf(i){
+  const d = S.decisions.get(i.id);
+  if (d) return DEC[d.decision] + (d.decision === 'review' && d.stage ? ' · ' + d.stage : '');
+  if (i.actual && i.actual.outcome) return i.actual.outcome;
+  return 'No decision recorded';
+}
+function viewArchive(){
+  const lede = 'Old and finished invites, kept here so “Today’s invites” stays short. Nothing is deleted. Search by project, GC or place, and restore anything you need back.';
+  const note = storeNote(); if (note) return head('Archive', lede) + note;
+  const q = String(S.archQuery || '').toLowerCase().trim();
+  let list = sortedInvites().filter(i => i.archived).reverse();
+  const total = list.length;
+  if (q) list = list.filter(i => { const sc = screen(i); return `${i.project} ${i.gcText} ${sc.gc ? sc.gc.g.name : ''} ${i.location} ${i.package} ${outcomeOf(i)}`.toLowerCase().includes(q); });
+  return head('Archive', lede)
+  + (total ? `<div class="filters"><input type="text" id="arch-search" placeholder="Type a project, GC or city to find it" value="${esc(S.archQuery||'')}" aria-label="Search the archive" data-act="archsearch" style="flex:1 1 280px"><span class="meta">Showing ${list.length} of ${total}</span></div>
+    <div class="tablebox"><table><thead><tr><th>Project</th><th>GC (tier)</th><th>Bid due</th><th>What happened</th><th>Archived</th><th></th></tr></thead><tbody>
+    ${list.map(i => { const sc = screen(i); return `<tr><td><b>${esc(i.project)}</b><div class="meta">${esc(i.location||'')}</div></td>
+      <td>${sc.gc ? esc(sc.gc.g.name) + ' (' + esc(sc.tier) + ')' : esc(i.gcText||'') + ' (not listed)'}</td>
+      <td class="num">${i.due ? fmtDate(i.due) : 'Not stated'}</td><td>${esc(outcomeOf(i))}</td><td class="num">${i.archivedAt ? fmtDate(i.archivedAt.slice(0,10)) : ''}</td>
+      <td><div class="row" style="gap:4px;flex-wrap:nowrap"><button class="btn ghost" data-act="open" data-id="${i.id}" type="button">Open details</button><button class="btn" data-act="restore" data-id="${i.id}" type="button">Restore</button></div></td></tr>`; }).join('') || `<tr><td colspan="6" class="meta">Nothing matches. Check the spelling.</td></tr>`}
+    </tbody></table></div>` : `<div class="empty">The archive is empty. On “Today’s invites”, click “Move to archive” on any invite you’re done with.</div>`)
+  + `<p class="meta">Archived invites still count on the Accuracy screen and can still be found with “Ask a question”.</p>`;
+}
+
+/* ---------- Events ---------- */
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-tab],[data-act]'); if (!t) return;
+  if (t.dataset.tab){ S.tab = t.dataset.tab; S.confirmClear = false; try{ localStorage.setItem('bss-tab', S.tab);}catch(x){} render(); window.scrollTo({top:0}); return; }
+  const a = t.dataset.act, id = t.dataset.id;
+  if (a === 'decide') decide(id, t.dataset.d);
+  else if (a === 'undo'){ S.decisions.delete(id); render(); write(() => S.db.doc('decisions/' + id).delete(), 'Undone.'); }
+  else if (a === 'open'){ S.openId = id; renderOverlay(); $('#drawer-close')?.focus(); }
+  else if (a === 'close'){ const back = S.openId; S.openId = null; renderOverlay(); document.querySelector(`[data-act="open"][data-id="${back}"]`)?.focus(); }
+  else if (a === 'toggleHandled'){ S.showHandled = !S.showHandled; render(); }
+  else if (a === 'gctier'){ S.gcTier = t.dataset.t; render(); }
+  else if (a === 'gcmore'){ S.gcMore = !S.gcMore; render(); }
+  else if (a === 'bulkclear'){ S.bulk = null; render(); }
+  else if (a === 'archive') setArchived([id], true);
+  else if (a === 'restore') setArchived([id], false);
+  else if (a === 'archpast') setArchived(activeInvites().filter(i => i.due && i.due < today()).map(i => i.id), true);
+  else if (a === 'archhandled') setArchived(activeInvites().filter(i => S.decisions.has(i.id)).map(i => i.id), true);
+  else if (a === 'gcimportyes') applyGcImport();
+  else if (a === 'gcimportno'){ S.gcImport = null; S.gcImportErr = ''; const fi = $('#gc-file'); if (fi) fi.value = ''; render(); }
+  else if (a === 'screenit') screenPasted();
+  else if (a === 'cleartry'){ S.tryResult = null; S.tryDraft = ''; S.tryErr=''; render(); }
+  else if (a === 'addtry'){ const r = S.tryResult; if (!r) return; const nid = 'pasted-' + Date.now(); S.invites.set(nid, r); S.tryResult = null; S.tryDraft=''; render(); write(() => S.db.doc('invites/' + nid).set({...r, addedBy:by(), received: r.received || today()}), 'Added to Today’s invites.'); }
+  else if (a === 'clearask'){ S.confirmClear = true; render(); }
+  else if (a === 'clearno'){ S.confirmClear = false; render(); }
+  else if (a === 'clearyes'){ const ids = [...S.decisions.keys()]; S.decisions.clear(); S.confirmClear = false; render(); write(() => Promise.all(ids.map(i => S.db.doc('decisions/' + i).delete())), 'All decisions cleared.'); }
+  else if (a === 'fbopen'){ S.fbScreen = S.tab; S.fbOpen = true; renderOverlay(); $('#fb-text')?.focus(); }
+  else if (a === 'fbabout'){ S.fbScreen = S.tab === 'score' ? 'score' : 'digest'; S.fbDraft = `About “${t.dataset.p}”: `; S.fbOpen = true; renderOverlay(); $('#fb-text')?.focus(); }
+  else if (a === 'fbclose'){ S.fbDraft = $('#fb-text')?.value || ''; S.fbOpen = false; renderOverlay(); }
+  else if (a === 'asknew'){ S.askLog.length && (S.askLog[0].seen = true); const q = $('#ask-q'); if (q){ q.scrollIntoView({block:'center'}); q.focus(); } }
+  else if (a === 'askstop'){ S.askCtl?.abort(); }
+  else if (a === 'askrate'){ const x = S.askLog[+t.dataset.n]; if (!x || x.rated) return; x.rated = true; render(); write(() => S.db.collection('feedback').add({screen:'ask', text:`Ask: ${t.dataset.r}\nQ: ${x.q}\nA: ${x.a.slice(0,1500)}`, by:by(), at:new Date().toISOString(), done:false})); }
+  else if (a === 'estcancel'){ S.estUpload = null; S.estErr = ''; const fi = $('#est-file'); if (fi) fi.value = ''; render(); }
+  else if (a === 'estdel'){ S.estDel = t.dataset.id; render(); }
+  else if (a === 'estdelno'){ S.estDel = null; render(); }
+  else if (a === 'estdelyes') deleteEstimate(t.dataset.id);
+  else if (a === 'copy'){ const el = document.getElementById(t.dataset.src); const txt = el ? el.textContent : ''; (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(() => toast('Copied.'), () => { if (el){ el.hidden = false; const r = document.createRange(); r.selectNodeContents(el); const s = getSelection(); s.removeAllRanges(); s.addRange(r); } toast('Selected. Press Ctrl+C or ⌘C to copy.'); }); }
+});
+$('#fab').addEventListener('click', () => { S.fbScreen = S.tab; S.fbOpen = !S.fbOpen; renderOverlay(); if (S.fbOpen) $('#fb-text')?.focus(); });
+document.addEventListener('change', e => {
+  const t = e.target; const a = t.dataset.act; if (!a) return;
+  if (a === 'estfile'){ const f = t.files && t.files[0]; if (f) readEstimateFile(f); return; }
+  if (a === 'estmeta'){ const e = S.estimates.get(t.dataset.id); if (e){ e[t.dataset.f] = t.value; write(() => S.db.doc('estimates/' + t.dataset.id).update({[t.dataset.f]:t.value}), 'Saved.'); } return; }
+  if (a === 'emlfile'){ const f = t.files && t.files[0]; if (!f) return; fileToText(f).then(x => { S.tryDraft = x; S.tryErr = ''; render(); }, e => { S.tryErr = (e && e.message) || 'That file couldn’t be read.'; render(); showCard('try-card'); }); return; }
+  if (a === 'bulkfiles'){ if (t.files && t.files.length) bulkInvites(t.files, t.dataset.where); return; }
+  if (a === 'gcfile'){ const f = t.files && t.files[0]; if (f) readGcFile(f); return; }
+  if (a === 'gcfield') gcField(t.dataset.id, t.dataset.f, t.value);
+  else if (a === 'stage'){ const d = S.decisions.get(t.dataset.id); if (!d) return; d.stage = t.value; write(() => S.db.doc('decisions/' + t.dataset.id).update({stage:t.value}), 'Step updated.'); }
+  else if (a === 'flag') saveSettings({flags:{[t.dataset.k]:t.checked}});
+  else if (a === 'unlisted') saveSettings({unlisted:t.value});
+  else if (a === 'smallwords') saveSettings({smallScopeWords:t.value.split(',').map(x => x.trim()).filter(Boolean)});
+  else if (a === 'busycount') saveSettings({busyCount:Math.max(1, Math.min(20, +t.value || 4))});
+  else if (a === 'busydays') saveSettings({busyDays:Math.max(1, Math.min(14, +t.value || 3))});
+  else if (a === 'duedays') saveSettings({dueSoonDays:Math.max(1, Math.min(30, +t.value || 7))});
+  else if (a === 'states') saveSettings({homeStates:t.value.toUpperCase().split(/[^A-Z]+/).filter(s => s.length === 2)});
+  else if (a === 'fbdone'){ const f = S.feedback.get(t.dataset.id); if (f){ f.done = t.checked; write(() => S.db.doc('feedback/' + t.dataset.id).update({done:t.checked})); } }
+});
+document.addEventListener('input', e => {
+  const t = e.target;
+  if (t.dataset.act === 'gcsearch'){ S.gcQuery = t.value; render(); }
+  else if (t.dataset.act === 'gcfield' && t.type === 'text') gcField(t.dataset.id, t.dataset.f, t.value);
+  else if (t.dataset.act === 'archsearch'){ S.archQuery = t.value; render(); }
+  else if (t.id === 'try-text') S.tryDraft = t.value;
+  else if (t.id === 'ask-q') S.askDraft = t.value;
+});
+document.addEventListener('submit', e => {
+  e.preventDefault(); const f = e.target;
+  if (f.dataset.act === 'askform'){ ask($('#ask-q').value); return; }
+  if (f.dataset.act === 'estsave'){ saveEstimate(); return; }
+  if (f.dataset.act === 'addgc'){
+    const name = $('#gc-new-name').value.trim(); if (!name) return; const tier = $('#gc-new-tier').value;
+    let id = slug(name); if (S.gcs.has(id)) { toast(name + ' is already on the GC list.'); return; }
+    const g = {name, aka:'', domains:'', tier, why:'Added in the sandbox', notes:'', trend:'', revisit:'', score:null, check:'', updatedBy:by(), updatedAt:new Date().toISOString()};
+    S.gcs.set(id, g); S.gcQuery = ''; render(); write(() => S.db.doc('gcs/' + id).set(g), name + ' added as ' + tier + '.');
+  } else if (f.dataset.act === 'fbsave'){
+    const text = $('#fb-text').value.trim(); if (!text) return;
+    const item = {screen:$('#fb-screen').value, text, by:by(), at:new Date().toISOString(), done:false};
+    S.fbOpen = false; S.fbDraft = ''; renderOverlay();
+    write(() => S.db.collection('feedback').add(item), 'Saved. Thank you.');
+  }
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape'){ if (S.fbOpen){ S.fbOpen = false; renderOverlay(); } else if (S.openId){ S.openId = null; renderOverlay(); } } });
+
+/* ---------- Boot ---------- */
+render();
+(async () => {
+  const cl = window.claude;
+  if (!cl || !cl.use){ S.db = null; render(); return; }
+  const [db, user, sample] = await Promise.all([cl.use('db'), cl.use('user'), cl.use('sample')]);
+  S.db = db; S.user = user; S.sample = sample;
+  if (user){ try { S.me = await user.id(); } catch (e) {} }
+  if (!db){ render(); return; }
+  const coll = (name, key, after) => db.collection(name).onSnapshot(snap => {
+    const m = new Map(); for (const d of snap.docs) m.set(d.id, {...d.data()}); S[key] = m; if (after) after(); render();
+  }, () => render());
+  coll('gcs', 'gcs', () => S.loaded.gcs = true);
+  coll('invites', 'invites', () => S.loaded.invites = true);
+  coll('decisions', 'decisions');
+  coll('feedback', 'feedback');
+  coll('estimates', 'estimates');
+  coll('estrows', 'estRows');
+  db.doc('settings/criteria').onSnapshot(d => { if (d.exists) S.settings = {...d.data()}; render(); }, () => {});
+})();
+})();
+</script>
+
+</body></html>
