@@ -9,6 +9,8 @@ Reads spec books, drawings, proposals and estimates, checks them against each ot
 - **Drawings:** checks sheet numbers, references like 5/A-501 and finish tags; reads Bluebeam markups; accepts pictures and screenshots; answers questions about the drawings.
 - **Drawing review:** compares a CIM shop drawing with the architect's drawing and the spec, with close-ups of each spot.
 - **Room schedule:** builds a draft from the drawings or an estimate, and turns it into a Microvellum import file.
+- **Automatic checking:** every AI answer is checked again as soon as it's made, in rounds until nothing changes. Corrections are only accepted when backed by text in the document; anything else is flagged for a person.
+- **Splitting:** saves a spec book as one PDF per section, a drawing set as one PDF per sheet (named by sheet number and title), or either one as parts under a size limit for email or upload.
 - **Deep check:** goes back over the whole project several times until nothing new turns up.
 - **Issues:** one list of everything flagged, with a decision for each: review required, approved exception or correction needed.
 
