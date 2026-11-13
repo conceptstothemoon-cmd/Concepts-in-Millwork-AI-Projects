@@ -46,44 +46,17 @@
 <div class="toast" id="toast" role="status" hidden></div>
 
 <script>
-(function () {
+window.PD_APP = function (DATA) {
   'use strict';
-  var DATA = __DATA__;
   var TODAY = '2026-11-09';
 
   // ---------- Supplier documents (from Jim's files) ----------
   var UNIT = { EA: 'each', GA: 'gallon', QT: 'quart', PA: '5-gal pail', PR: 'pair', ST: 'set', BX: 'box', PK: 'pack', HU: 'hundred', CAS: 'case', DR: '55-gal drum', SF: 'sq ft' };
-  var CORIAN = [
-    { g: 0, full: 390, half: 235, colors: ['Glacier White'] },
-    { g: 1, full: 437, half: 260, colors: ['Bisque', 'Bone', 'Cameo White', 'Linen', 'Pearl Gray', 'Silver Gray', 'Vanilla'] },
-    { g: 2, full: 554, half: 317, colors: ['Abalone', 'Antarctica', 'Artista Beige', 'Artista Canvas', 'Artista Dust', 'Artista Gray', 'Artista Mist', 'Artista Sage', 'Aurora', 'Canyon', 'Designer White', 'Dove', 'Elegant Gray', 'Everest', 'Excavage', 'Glacier Ice', 'Matterhorn', 'Modern White', 'Neutral Concrete', 'Pebble Lane', 'Sandstone', 'Silt', 'Sparkling White', 'Stonique'] },
-    { g: 3, full: 709, half: 395, colors: ['Ash Concrete', 'Arctic Ice', 'Bleached Nuwood', 'Canvas', 'Carbon Concrete', 'Concrete', 'Cosmos Prima', 'Deep Anthracite', 'Deep Black Quartz', 'Deep Cloud', 'Deep Espresso', 'Deep Mink', 'Deep Night Sky', 'Deep Nocturne', 'Deep Sable', 'Deep Storm', 'Deep Titanium', 'Doeskin', 'Hazelnut', 'Hot', 'Laguna', 'Laguna Terrazzo', 'Lava Rock', 'Nimbus Prima', 'Platinum', 'Peppered Terrazzo', 'Provence Nuwood', 'Rice Paper', 'Sahara', 'Sandalwood', 'Sand Storm', 'Savannah', 'Serene Sage', 'Silver Birch', 'Silverite', 'Sparkling Granita', 'Venaro White', 'Verdant', 'Weathered Concrete', 'Whipped Cream', 'Whisper', 'White Jasmine', 'Willow'] },
-    { g: 4, full: 820, half: 450, colors: ['Arrowroot', 'Ash Aggregate', 'Calacatta Greige', 'Carbon Aggregate', 'Carrara Crema', 'Carrara Lino', 'Cirrus White', 'Clam Shell', 'Domino Terrazzo', 'Dune Prima', 'Evening Prima', 'Gray Onyx', 'Juniper', 'Limestone Prima', 'Natural Gray', 'Neutral Aggregate', 'Rain Cloud', 'Rosemary', 'Sagebrush', 'Sepia Linear', 'Silver Linear', 'Smoke Drift Prima', 'Sorrel', 'Stonecrest Smoke', 'Weathered Aggregate', 'White Onyx', 'Windswept Prima', 'Witch Hazel'] }
-  ];
-  var FORMICA = [
-    { what: 'Base and Select finishes (-58, -43, -90, -MC, -SP), HPL grades V4, V5, 10, 12, 20', sf: 0.10 },
-    { what: 'Premium finishes (-11, -26, -34, -42, -46, -ML, -NG, -PG, -PX, -RD, -WR), HPL grades V4, V5, 10, 12, 20 and 180FX', sf: 0.10 },
-    { what: 'ColorCore2', sf: 0.20 },
-    { what: 'HardStop, IdealEdge', pct: 4 },
-    { what: 'DecoMetal, Compact', pct: 5 },
-    { what: 'Everform Solid Surface', pct: 7 }
-  ];
-  var SUGA = [['SGESR-DC4513-10', '10" DC4513, 115 lb, 304 stainless, 10/box', 49], ['SGESR-DC4513-12', '12" DC4513, 111 lb, 304 stainless, 10/box', 48], ['SGESR-DC4513-14', '14" DC4513, 108 lb, 304 stainless, 10/box', 48], ['SGESR-DC4513-16', '16" DC4513, 104 lb, 304 stainless, 10/box', 49], ['SGESR-DC4513-18', '18" DC4513, 100 lb, 304 stainless, 10/box', 49], ['SGESR-DC4513-20', '20" DC4513, 97 lb, 304 stainless, 10/box', 49], ['SGESR-DC4513-22', '22" DC4513, 95 lb, 304 stainless, 10/box', 49], ['SGESR-DC4513-24', '24" DC4513, 92 lb, 304 stainless, 10/box', 49], ['SGESR-DC4513-26', '26" DC4513, 90 lb, 304 stainless, 10/box', 50], ['SGESR-DC4513-28', '28" DC4513, 87 lb, 304 stainless, 10/box', 49], ['SGESR-DC4513-8', 'ESR-DC4513 full-extension slide, stainless, 8", per pair', 33],
-    ['SGESR-SC4513-16', '16" SC4513, 82 lb, 304 stainless, soft close, 10/box', 39], ['SGESR-SC4513-18', '18" SC4513, 79 lb, 304 stainless, soft close, 10/box', 39], ['SGESR-SC4513-20', '20" SC4513, 77 lb, 304 stainless, soft close, 10/box', 39], ['SGESR-SC4513-22', '22" SC4513, 75 lb, 304 stainless, soft close, 10/box', 39], ['SGESR-SC4513-24', '24" SC4513, 73 lb, 304 stainless, soft close, 10/box', 39], ['SGESR-SC4513-26', '26" SC4513, 70 lb, 304 stainless, soft close, 10/box', 39], ['SGESR-SC4513-28', '28" SC4513, 68 lb, 304 stainless, soft close, 10/box', 39]];
-  var DOCS = {
-    wurth: { vendor: 'WLC', kind: 'Contract price list', title: 'Wurth Louis and Company contract update', date: '2026-07-20', eff: '2026-07-20', from: 'Wurth Louis and Company, customer 48725, sales rep James Ames', note: 'These revised prices replace all earlier Wurth quotes and contract pricing.' },
-    corian: { vendor: 'HBS', kind: 'Distributor price book', title: 'Hallmark Building Supplies Corian price book', date: '2026-01-02', eff: '2026-01-05', from: 'Hallmark Building Supplies, printed for Concepts in Millwork, account 602102', note: 'Corian solid surface, priced by color group and sheet size.' },
-    soudal: { vendor: 'SOU', kind: 'Price sheet (Excel)', title: 'Soudal (BOSS Products) price sheet', date: '2026-05-01', eff: '2026-05-01', from: 'Soudal / BOSS Products distributor price sheet, compared with the 2025 sheet in the same file', note: 'Sealants, foams, adhesives and accessories, with pallet pricing.' },
-    formica: { vendor: 'NWP', kind: 'Increase notice', title: 'Formica price increase notice', date: '2026-01-02', eff: '2026-02-02', from: 'National Wood Products, Formica distributor', note: 'No prices, only increase rules for orders on or after Feb 2, 2026.' },
-    suga: { vendor: 'WLC', kind: 'Rep email', title: 'Sugatsune increase, forwarded by Wurth', date: '2026-01-28', eff: '2026-01-30', from: 'Rob Berrett, Wurth Louis and Company, to Jim Szabo and Brian Reilly', note: 'Average 22% across Sugatsune; the stainless ESR slides used in MRI rooms rise 33% to 50%.' }
-  };
+  // Real supplier prices, terms and account details are not stored in this file.
+  // They arrive in DATA: from SharePoint after sign-in (index.html), or embedded by build.py
+  // in the offline copy. See README.md.
+  var CORIAN = DATA.corian, FORMICA = DATA.formica, SUGA = DATA.suga, DOCS = DATA.docs, BASE_VENDORS = DATA.vendors;
   var DOC_ORDER = ['soudal', 'formica', 'suga', 'wurth', 'corian'];
-  var BASE_VENDORS = {
-    WLC: { name: 'Wurth Louis and Company', supplies: 'Hardware, finishes, fasteners', freight: 0, minOrder: 0, minCharge: 0, freeOver: 0, leadDays: 0, terms: 'Freight and terms per wurthlac.com terms of sale (not in the contract letter)' },
-    HBS: { name: 'Hallmark Building Supplies', supplies: 'Corian solid surface', freight: 218, minOrder: 0, minCharge: 0, freeOver: 0, leadDays: 21, terms: '$218 per shipment with 15 business days notice (20 for non-stock), ships Fridays from Denver. Over 24 sheets of one color: 4 to 8 weeks, ask quote@hllmark.com for commercial pricing.' },
-    NWP: { name: 'National Wood Products', supplies: 'Formica laminate', freight: 0, minOrder: 0, minCharge: 0, freeOver: 0, leadDays: 0, terms: 'Not in the notice. Ask your Formica sales manager.' },
-    SOU: { name: 'Soudal (BOSS Products)', supplies: 'Sealants and adhesives', freight: 0, minOrder: 250, minCharge: 30, freeOver: 2000, leadDays: 0, terms: '$250 minimum order or a $30 charge. Freight prepaid at $2,000 to one location. Pallet pricing for the same product and package size.' }
-  };
   var CATS = ['Hardware', 'Finishes', 'Solid surface', 'Laminate', 'Sealants & adhesives'];
   var BASE_RULES = {
     autoLimit: 5, bigLimit: 50, trusted: { WLC: true, HBS: true, NWP: false, SOU: false }, checkOdd: true, checkPack: true, combineOn: true, combineDays: 14,
@@ -297,7 +270,7 @@
   }
   function askDrafts(wc, st) {
     var out = [];
-    if (S.dec.wurth === 'useask' && wc.flags.length) out.push({ to: 'James Ames, Wurth Louis and Company', body: 'Hi James,\n\nThanks for the updated contract pricing (customer 48725, July 20). Could you check these before we load them?\n' + wc.flags.map(function (f) { return '- ' + f.text; }).join('\n') + '\n\nThanks,\nJim, Concepts in Millwork' });
+    if (S.dec.wurth === 'useask' && wc.flags.length) out.push({ to: 'James Ames, Wurth Louis and Company', body: 'Hi James,\n\nThanks for the updated contract pricing (customer ' + DOCS.wurth.customer + ', July 20). Could you check these before we load them?\n' + wc.flags.map(function (f) { return '- ' + f.text; }).join('\n') + '\n\nThanks,\nJim, Concepts in Millwork' });
     if (S.dec.suga === 'alt' || S.dec.suga === 'project') out.push({ to: 'Rob Berrett, Wurth Louis and Company', body: 'Hi Rob,\n\nThanks for the heads-up on the Sugatsune increase. The ESR DC4513 and SC4513 stainless slides went up 33% to 50%.\n' + (S.dec.suga === 'alt' ? 'Is there another 304 stainless full-extension slide rated for MRI rooms that you can quote for us?' : 'Could you get us project pricing on these slides for our next MRI room job?') + '\n\nThanks,\nJim, Concepts in Millwork' });
     if (S.dec.formica === 'ask') out.push({ to: 'Formica sales manager (via National Wood Products)', body: 'Hi,\n\nWe received the notice of the February 2 increase (+$0.10 per sq ft on HPL grades V4, V5, 10, 12 and 20, +$0.20 on ColorCore2). Could you send updated per-sheet prices for the sizes we buy most so we can update our system?\n\nThanks,\nJim, Concepts in Millwork' });
     if (S.dec.soudal === 'except') out.push({ to: 'Soudal (BOSS Products)', body: 'Hi,\n\nThanks for the May 1 price sheet. ' + st.over.length + ' items went up more than ' + S.rules.bigLimit + '% from 2025, including:\n' + st.over.slice(0, 5).map(function (c) { return '- ' + c.s[1] + (c.s[2] ? ' (' + c.s[2] + ')' : '') + ', ' + money(c.s[9]) + ' to ' + money(c.s[6]); }).join('\n') + '\n\nCan you confirm these are correct, or quote better pricing?\n\nThanks,\nJim, Concepts in Millwork' });
@@ -565,5 +538,5 @@
   var hash = (location.hash || '').replace('#', '');
   if (RENDER[hash]) S.tab = hash;
   render();
-})();
+};
 </script>

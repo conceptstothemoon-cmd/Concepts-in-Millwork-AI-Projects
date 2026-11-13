@@ -1,5 +1,14 @@
 # Changelog
 
+## Behind Microsoft 365 sign-in — November 13, 2026
+
+- The online page (`index.html`) no longer contains prices. People sign in with their CIM Microsoft 365 account and the page loads the price file from SharePoint, so only people with access to that file see prices. This makes it safe to publish the page with GitHub Pages.
+- Moved the Corian, Formica and Sugatsune prices, document details (account and customer numbers) and vendor terms out of `src/app.html` into a private data file, `data/document-info.json`.
+- Removed `data/supplier-prices.json` and `Purchasing-Desk-Beta.html` from the repo; `data/` and `private-build/` are now gitignored. Earlier commits still contain them, so keep the repo private.
+- `build.py` now writes `index.html` (no prices) every time, and, when the price files are in `data/`, the SharePoint price file and the offline copy for Jim into `private-build/`. The offline copy works exactly as before.
+- Removed real prices from the README's examples.
+- Added `setup/SETUP.md` for IT.
+
 ## Folder move — November 13, 2026
 
 - Moved from `projects/purchasing-desk-beta1/purchasing-desk/` to `projects/purchasing-desk/`.

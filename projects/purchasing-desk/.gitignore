@@ -5,3 +5,8 @@
 *.xls
 *.txt
 __pycache__/
+
+# CIM prices: never commit. Kept in SharePoint (see setup/SETUP.md).
+data/
+private-build/
+Purchasing-Desk-Beta.html
