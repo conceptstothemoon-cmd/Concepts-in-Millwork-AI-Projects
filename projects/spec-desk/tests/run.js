@@ -18,7 +18,11 @@ const results = []; const log = (name, ok, detail) => { results.push({ name, ok,
   await ctx.addInitScript({ path: path.join(H, 'mock-claude.js') });
   await ctx.route('**/*', async route => {
     const u = route.request().url();
-    if (u.startsWith('http://specdesk.test/')) return route.fulfill({ path: APP, contentType: 'text/html' });
+    if (u.startsWith('http://specdesk.test/')) {   // the page and the files next to it (config.js, m365.js, vendor/)
+      const rel = decodeURIComponent(new URL(u).pathname).replace(/^\//, ''), f = rel ? path.join(path.dirname(APP), rel) : APP;
+      if (!fs.existsSync(f) || !fs.statSync(f).isFile()) return route.fulfill({ status: 404, body: '' });
+      return route.fulfill({ path: f, contentType: f.endsWith('.html') ? 'text/html' : f.endsWith('.js') ? 'application/javascript' : 'application/octet-stream' });
+    }
     const lib = Object.keys(LIB).find(k => u.endsWith(k));
     if (lib) return route.fulfill({ path: path.join(H, LIB[lib]), contentType: 'application/javascript' });
     if (/fonts\.(googleapis|gstatic)/.test(u)) return route.fulfill({ body: '', contentType: 'text/css' });

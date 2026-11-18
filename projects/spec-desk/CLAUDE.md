@@ -24,21 +24,18 @@ A single-page tool for Concepts in Millwork (CIM) that reads construction docume
 - **Automatic checking** (`autoCheck`; settings `AC` in the Deep check tab, on by default, up to 5 rounds): every AI answer is re-checked as soon as it's made. Covers summaries (`huntSection` + `verifyStatements`), Ask, Compare (`checkComparison`: uncovered paragraphs, both sides re-read, batched fresh search for gaps), Drawing review (close-ups plus a second look given the already-found list), Ask the drawings, the room schedule (`checkRoomSheet`) and RE: references (read until two readings agree). Rounds stop when one adds and changes nothing. Same rule as Deep check: a correction needs text found in the document, an item is corrected at most once, and everything else is `disputed` and goes to Issues.
 - **Splitting** (block "Splitting"): spec books by CSI section (`saveZip`); drawing sets as one PDF per sheet named "<sheet> <title>" in series folders (`splitSetBySheet`, title from `sheetTitle`); any PDF into parts under a size limit, keeping sections and sheets whole (`splitBySize`; a unit bigger than the limit is spread over parts and reported). ZIPs use STORE because PDFs are already compressed. Splitting a 500 MB set needs about 3.7 GB of browser memory.
 - **Estimates** (`estCols`, `estNonProduct`): "ITEM TO BE PRICED" is the item identifier and DESCRIPTION the product name. Lines with no item number whose description is a charge (freight, tax, bond…) are skipped and named on screen; a $0 value is never a reason to skip.
-- **Tests:** `tests/` drives the page in headless Chromium with a simulated Claude (`tests/mock-claude.js`) that plants known mistakes. See `tests/README.md`.
+- **Tests:** `tests/` drives the page in headless Chromium with a simulated Claude (`tests/mock-claude.js`) that plants known mistakes; `tests/run5.js` covers the Microsoft 365 route with fake sign-in and SharePoint (`tests/fake-m365.js`) and the real service handler. See `tests/README.md`.
 - CIM drawing conventions (sheet series M/P/V/S/ST/DR/W/T/SC/L, "RE:" architect references in view titles, item tags like 101.01, hatch legend) are in `CMI_CONVENTIONS`.
 
-## What must change to run outside claude.ai
-The page relies on two claude.ai artifact runtime features, reached through `window.claude.use(...)` in the `capabilities` and `wiring` blocks. Outside claude.ai `window.claude` doesn't exist, so the page loads but AI features and file saving stay hidden.
-
-1. **AI calls (`caps.sample`).** 29 call sites use `caps.sample(prompt, opts)`, `caps.sample.json(prompt, opts)` and `caps.sample.limits()`. Options used: `signal` (AbortController), `modelTier` ('quick' | 'default'), `images` (array of JPEG Blobs). `.json()` must return the parsed JSON value of the reply.
-   - Replace with a small adapter object that has the same shape, so call sites don't change.
-   - The adapter should call the Claude API through a **server** that holds the API key (a small local Node or Python endpoint, or a serverless function). Never put an API key in the browser page or in this public repo.
-   - Map `modelTier` to model ids; send images as base64 image blocks; parse JSON tolerantly (whole reply, else a fenced block, else first `{`/`[` to last `}`/`]`).
-   - Errors should reject with `{ code, message }` using codes the UI already handles: `cancelled`, `rate_limited`, `prompt_too_large`, `invalid_json`, `not_granted`.
-2. **File saving (`caps.downloads`).** 4 call sites use `caps.downloads.save({ filename, data })` (data is a string or Blob). Replace with a normal browser download (Blob → object URL → `<a download>` click).
-3. Set `caps.ready = true` after wiring the adapters so `applyCaps()` shows the AI and save buttons.
-
-Everything else (PDF parsing, IndexedDB projects, project files, rendering) already works in a normal browser, including on GitHub Pages.
+## Running inside claude.ai and on its own
+The page gets Claude and file saving from one of two places, chosen in the `wiring` block:
+- **Inside claude.ai** (published as an artifact): `window.claude.use('sample')` and `use('downloads')`.
+- **Anywhere else** (GitHub Pages, localhost): `m365.js` (`window.SD.connect()`), set up by `config.js`.
+  - `downloads.save({filename, data})` is a normal browser download (CSV strings get a byte-order mark for Excel). Always on.
+  - With `clientId` filled in: Microsoft 365 sign-in (MSAL, `vendor/`), the same as CIM's other tools. The header shows the account (`drawMsAccount`).
+  - With `claudeEndpoint` too: `sample(prompt, {signal, modelTier, images})`, `sample.json` (tolerant parse: whole reply, fenced block, first `{`/`[` to last `}`/`]`) and `sample.limits()` call the Azure Function in `api/`, with the person's Entra token for the `access_as_user` scope. Images go as base64. Errors reject with the codes the UI handles (`cancelled`, `rate_limited`, `prompt_too_large`, `invalid_json`, `not_granted`, `network`, `refused`).
+  - Files: `addSpButtons()` puts a "From SharePoint" button after every `label[for]` of a file input; the picker (`spPick`) downloads the chosen files and hands them to that input's own change handler. Projects: `buildProjectBlob` makes the project file; `saveProjectToSharePoint` uploads it to `projectsFolder` (upload session over 4 MB); **Open from SharePoint** imports it with `importProjectFile`.
+- **The Claude service** (`api/`): `src/handler.js` holds all logic (sign-in check with `jose`, request limits, the Claude request, NDJSON streaming with pings so Azure's 230 s idle limit doesn't cut long answers); `src/functions/claude.js` is only the Azure wiring. Model `claude-opus-5-5`, adaptive thinking, effort `high` (`low` for the quick tier), `max_tokens` 64000, streaming with `finalMessage()`, server-side refusal fallbacks. Tests: `cd api && npm test`.
 
 ## Running it locally
 - Serve the folder over http (opening `index.html` as `file://` can break the pdf.js worker), e.g. `python3 -m http.server 8000` from this folder, then open http://localhost:8000.

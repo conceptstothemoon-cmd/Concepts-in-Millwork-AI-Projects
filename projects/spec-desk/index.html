@@ -41,6 +41,21 @@ body{margin:0; height:100%; background:var(--bg); color:var(--ink);
 button,input,select,textarea{font:inherit; color:inherit}
 :focus-visible{outline:2px solid var(--focus); outline-offset:2px}
 [hidden]{display:none !important}
+.ms-acct{display:inline-flex; gap:.4rem; align-items:center; font-size:.85rem; color:var(--muted)}
+.ms-acct b{color:var(--ink); font-weight:600}
+.sp-pick{margin-left:.35rem}
+.sp-dlg{position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center; z-index:60; padding:1rem}
+.sp-dlg .box{background:var(--surface); border:1px solid var(--line); border-radius:6px; width:min(720px,100%); max-height:85vh; display:flex; flex-direction:column; gap:.6rem; padding:1rem}
+.sp-dlg .box-h{display:flex; gap:.8rem; align-items:center; justify-content:space-between; flex-wrap:wrap}
+.sp-dlg select{padding:.3rem; border:1px solid var(--line); border-radius:4px; background:var(--bg)}
+.sp-crumbs{font-size:.85rem; display:flex; gap:.25rem; flex-wrap:wrap}
+.sp-crumbs button{background:none; border:0; color:var(--blue); cursor:pointer; padding:0; font-size:.85rem}
+.sp-list{overflow:auto; border:1px solid var(--line); border-radius:4px; min-height:12rem}
+.sp-list .it{display:flex; gap:.6rem; align-items:center; padding:.4rem .6rem; border-bottom:1px solid var(--line); cursor:pointer}
+.sp-list .it:hover{background:var(--sunk)}
+.sp-list .it.off{opacity:.45; cursor:default}
+.sp-list .it .nm{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.sp-list .it .sz{font-size:.8rem; color:var(--muted); white-space:nowrap}
 .split-sz{display:inline-flex; gap:.3rem; align-items:center}
 .split-sz select{font-size:.85rem; padding:.2rem; border:1px solid var(--line); border-radius:4px; background:var(--surface)}
 .chk-log{margin:.5rem 0 .8rem; padding:.45rem .7rem; border-left:3px solid var(--ok); background:var(--sunk); border-radius:3px; font-size:.9rem}
@@ -318,6 +333,7 @@ i.pc{cursor:default}
     <input id="projName" class="proj-name" aria-label="Project name" hidden>
     <span id="saveState" class="note" aria-live="polite"></span>
     <div class="file" id="fileInfo"></div>
+    <span id="msAcct" class="ms-acct" hidden></span>
     <div class="bar-actions">
       <button class="btn ghost small need-doc need-dl" id="btnIndex">Save index (CSV)</button>
       <button class="btn ghost small need-doc need-dl" id="btnZip">Save all sections (ZIP)</button>
@@ -327,6 +343,16 @@ i.pc{cursor:default}
     <input type="file" id="fileInput" accept="application/pdf,.pdf" hidden>
     <input type="file" id="projFile" accept=".zip,application/zip" hidden>
   </header>
+
+  <div id="spDlg" class="sp-dlg" hidden role="dialog" aria-modal="true" aria-labelledby="spTitle">
+    <div class="box">
+      <div class="box-h"><b id="spTitle">Open from SharePoint</b><select id="spPlace" aria-label="Where to look"></select></div>
+      <div id="spCrumbs" class="sp-crumbs"></div>
+      <div id="spList" class="sp-list" aria-live="polite"></div>
+      <p class="note" id="spMsg" aria-live="polite"></p>
+      <div class="row" style="justify-content:flex-end"><button class="btn ghost" id="spCancel">Cancel</button><button class="btn" id="spOpen" disabled>Open</button></div>
+    </div>
+  </div>
 
   <aside class="sb" id="sb" aria-label="Spec sections">
     <input id="secFilter" type="search" placeholder="Filter by number or title" aria-label="Filter sections">
@@ -395,6 +421,9 @@ i.pc{cursor:default}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="config.js"></script>
+<script src="vendor/msal-browser.min.js"></script>
+<script src="m365.js"></script>
 <script>
 'use strict';
 /* ---------- helpers ---------- */
@@ -772,7 +801,9 @@ function verifyQuote(quote, source) {
 function errCopy(e) {
   const c = e && e.code;
   return ({
-    not_granted: 'Claude access was declined for this page. Reload the page to be asked again.',
+    not_granted: ms.conn && ms.conn.configured ? 'Your Microsoft 365 sign-in wasn’t accepted by the Claude service. Sign out and in again, or ask IT to check the Spec Desk app registration.' : 'Claude access was declined for this page. Reload the page to be asked again.',
+    network: 'Couldn’t reach the Claude service. Check your connection, then try again.',
+    refused: 'Claude declined this request.',
     rate_limited: 'Too many requests right now. Wait a minute, then try again.',
     prompt_too_large: 'That was too much text for one request. Choose fewer sections or ask a narrower question.',
     invalid_json: 'Claude’s reply couldn’t be read as structured results. Try again.',
@@ -2430,6 +2461,25 @@ async function specBlob() {
 async function saveProjectFile(id) {
   const btn = $(`[data-pfile="${id}"]`); if (btn) { btn.disabled = true; btn.textContent = 'Building file…'; }
   try {
+    const { name, blob } = await buildProjectBlob(id);
+    await saveFile(name, blob);
+  } catch (e) { alertBar('Couldn’t build the project file: ' + (e.message || e)); }
+  if (btn) { btn.disabled = false; btn.textContent = 'Save project file'; }
+}
+async function saveProjectToSharePoint(id) {
+  const btn = $(`[data-psp="${id}"]`), st = $('#projStatus');
+  const say = t => { if (btn) btn.textContent = t; };
+  if (btn) btn.disabled = true;
+  try {
+    say('Building file…');
+    const { name, blob } = await buildProjectBlob(id);
+    const where = await ms.conn.files.saveProject(name, blob, f => say(`Uploading… ${Math.round(f * 100)}%`));
+    if (st) st.textContent = `Saved “${name}” (${mb(blob.size)}) to ${where}. Anyone with access to that folder can open it with “Open from SharePoint”.`;
+  } catch (e) { if (st) st.innerHTML = `<span class="err">Couldn’t save to SharePoint: ${esc(e.message || e)}</span>`; else alertBar('Couldn’t save to SharePoint: ' + (e.message || e)); }
+  if (btn) { btn.disabled = false; btn.textContent = 'Save to SharePoint'; }
+}
+async function buildProjectBlob(id) {
+  {
     const meta = await IDB.get('projects', id);
     const isOpen = state.project && state.project.id === id;
     const work = isOpen ? workSnapshot() : (await IDB.get('work', id)) || {};
@@ -2450,9 +2500,8 @@ async function saveProjectFile(id) {
     if (sb) zip.file('spec.pdf', await sb.arrayBuffer());
     zip.file('project.json', JSON.stringify({ format: 'spec-desk-project', version: 1, meta: { name: meta.name, created: meta.created, updated: meta.updated, specName: meta.specName, specPages: meta.specPages, sections: meta.sections, otherName: meta.otherName }, work, spec, other, drawings: dsets }));
     const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
-    await saveFile(safeName(meta.name) + ' - Spec Desk project.zip', blob);
-  } catch (e) { alertBar('Couldn’t build the project file: ' + (e.message || e)); }
-  if (btn) { btn.disabled = false; btn.textContent = 'Save project file'; }
+    return { name: safeName(meta.name) + ' - Spec Desk project.zip', blob };
+  }
 }
 async function importProjectFile(file) {
   const st = $('#projStatus');
@@ -2501,6 +2550,7 @@ async function projectListHtml(compact) {
       <div class="row">
         ${isOpen ? '' : `<button class="btn small" data-popen="${p.id}">Open</button>`}
         <button class="btn ghost small need-dl" data-pfile="${p.id}">Save project file</button>
+        ${ms.conn && ms.conn.files ? `<button class="btn ghost small" data-psp="${p.id}">Save to SharePoint</button>` : ''}
         ${compact ? '' : `<button class="btn ghost small" data-pdel="${p.id}">Delete</button>`}
       </div></div>`;
   }).join('')}</div>`;
@@ -2518,7 +2568,8 @@ async function showProjects() {
       <div class="row">
         <input id="newProjName" placeholder="New project name, e.g. Riverside Medical Center" aria-label="New project name" style="flex:1;min-width:14rem;padding:.42rem .6rem;border:1px solid var(--line);border-radius:4px;background:var(--bg)">
         <button class="btn" id="btnNewProj">Create project</button>
-        <label class="btn ghost" for="projFile">Open project file</label>
+        <label class="btn ghost" for="projFile" data-no-sp>Open project file</label>
+        ${ms.conn && ms.conn.files ? '<button class="btn ghost" id="btnProjSp">Open from SharePoint</button>' : ''}
       </div>
       <p class="note" id="projStatus" aria-live="polite"></p>
     </div>
@@ -2533,6 +2584,10 @@ async function showProjects() {
     show('empty'); renderRecent();
   };
   $('#newProjName').addEventListener('keydown', e => { if (e.key === 'Enter') $('#btnNewProj').click(); });
+  if ($('#btnProjSp')) $('#btnProjSp').onclick = async () => {
+    const files = await spPick({ title: 'Open a project from SharePoint', accept: /\.zip$/i, startInProjects: true });
+    if (files && files[0]) importProjectFile(files[0]);
+  };
 }
 async function renderRecent() {
   const el = $('#recentProjects'); if (!el) return;
@@ -4657,9 +4712,146 @@ function drawDeepResults() {
 function applyCaps() {
   const ai = !!caps.sample, dl = !!caps.downloads;
   for (const el of $$('.need-ai')) el.hidden = !ai;
-  for (const el of $$('.need-ai-off')) el.hidden = ai || !caps.ready;
+  const off = aiOffText();
+  for (const el of $$('.need-ai-off')) { el.hidden = ai || !caps.ready; if (off) { if (el.dataset.orig == null) el.dataset.orig = el.textContent; el.textContent = off; } }
+  addSpButtons();
   for (const el of $$('.need-dl')) if (el.id !== 'cmpCsv') el.hidden = !dl;
   if (!dl && $('#cmpCsv')) $('#cmpCsv').hidden = true;
+}
+
+/* ---------- Microsoft 365: sign-in, Claude through CIM's service, SharePoint files ---------- */
+const ms = { conn: null };
+// Why the AI buttons are hidden, when it isn't the claude.ai case the page's own notes describe
+function aiOffText() {
+  const c = ms.conn;
+  if (!c) return '';
+  if (!c.configured) return 'The AI features need CIM’s Microsoft 365 setup (see setup/SETUP.md), or open this page in Claude.';
+  if (!c.signedIn) return 'Sign in with Microsoft to use Claude.';
+  if (!c.aiOn) return 'Claude isn’t connected on this site yet (see setup/SETUP.md, step 3).';
+  return '';
+}
+function drawMsAccount() {
+  const el = $('#msAcct'), c = ms.conn; if (!el) return;
+  el.hidden = !(c && c.configured);
+  if (el.hidden) return;
+  el.innerHTML = c.signedIn
+    ? `<span title="${esc(c.account.email)}">Signed in as <b>${esc(c.account.name)}</b></span><button class="btn ghost small" id="msOut">Sign out</button>`
+    : `${c.error ? `<span class="err">${esc(c.error)}</span>` : ''}<button class="btn small" id="msIn">Sign in with Microsoft</button>`;
+  if ($('#msIn')) $('#msIn').onclick = () => c.signIn && c.signIn();
+  if ($('#msOut')) $('#msOut').onclick = () => c.signOut();
+}
+// Every "choose a file" button gets a "From SharePoint" twin that fills the same file input
+function addSpButtons() {
+  if (!(ms.conn && ms.conn.files)) return;
+  for (const lab of $$('label[for]')) {
+    if (lab.hasAttribute('data-no-sp') || (lab.nextElementSibling && lab.nextElementSibling.classList.contains('sp-pick'))) continue;
+    const input = document.getElementById(lab.htmlFor);
+    if (!input || input.type !== 'file') continue;
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'btn ghost small sp-pick ' + [...lab.classList].filter(c => /^need-/.test(c)).join(' ');
+    b.textContent = 'From SharePoint'; b.dataset.spFor = input.id; b.title = 'Pick from SharePoint or OneDrive: ' + lab.textContent.trim();
+    lab.after(b);
+  }
+}
+document.addEventListener('click', async e => {
+  const b = e.target.closest('.sp-pick'); if (!b) return;
+  const input = document.getElementById(b.dataset.spFor); if (!input) return;
+  const files = await spPick({ title: 'Open from SharePoint: ' + ((document.querySelector(`label[for="${input.id}"]`) || {}).textContent || '').trim(), accept: acceptRx(input.accept), multiple: input.multiple });
+  if (!files || !files.length) return;
+  const dt = new DataTransfer(); for (const f of files) dt.items.add(f);
+  input.files = dt.files;                                   // the file input's own handler takes it from here
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+});
+function acceptRx(accept) {
+  const ext = new Set();
+  for (const a of String(accept || '').split(',').map(x => x.trim().toLowerCase()).filter(Boolean)) {
+    if (a.startsWith('.')) ext.add(a.slice(1));
+    else if (a === 'application/pdf') ext.add('pdf');
+    else if (a === 'application/zip') ext.add('zip');
+    else if (a.startsWith('image/')) ext.add(a.slice(6) === 'jpeg' ? 'jpe?g' : a.slice(6));
+  }
+  return ext.size ? new RegExp(`\\.(${[...ext].join('|')})$`, 'i') : /./;
+}
+// A small SharePoint / OneDrive file browser. Resolves with the downloaded File objects, or null.
+const spUi = { place: null, stack: [], items: [], picked: new Set(), opts: null, done: null };
+function spPick(opts) {
+  return new Promise(resolve => {
+    if (spUi.done) spUi.done(null);
+    Object.assign(spUi, { opts, done: resolve, picked: new Set(), stack: [], items: [] });
+    $('#spTitle').textContent = opts.title || 'Open from SharePoint';
+    $('#spMsg').textContent = ''; $('#spOpen').disabled = true; $('#spOpen').textContent = 'Open';
+    $('#spDlg').hidden = false;
+    spStart();
+  });
+}
+async function spStart() {
+  const sel = $('#spPlace'), f = ms.conn.files;
+  $('#spList').innerHTML = '<p class="note" style="padding:.6rem">Loading…</p>';
+  try {
+    const places = await f.places();
+    if (spUi.opts.startInProjects) {
+      const h = await f.projectsHome();
+      places.unshift({ id: 'proj', name: h.where, drive: h.drive, root: h.id });
+    }
+    spUi.places = places;
+    sel.innerHTML = places.map((p, i) => `<option value="${i}">${esc(p.name)}</option>`).join('');
+    sel.onchange = () => spGo(spUi.places[+sel.value]);
+    spGo(places[0]);
+  } catch (e) { $('#spList').innerHTML = `<p class="err" style="padding:.6rem">${esc(e.message || e)}</p>`; }
+}
+function spGo(place, folder) {
+  if (place) { spUi.place = place; spUi.stack = place.root ? [{ id: place.root, name: place.name }] : []; }
+  if (folder) spUi.stack.push(folder);
+  spLoad();
+}
+async function spLoad() {
+  const cur = spUi.stack[spUi.stack.length - 1];
+  spUi.picked.clear(); $('#spOpen').disabled = true;
+  const base = spUi.place.root ? 1 : 0;   // a place that starts in a folder keeps that folder as its top
+  $('#spCrumbs').innerHTML = [`<button data-crumb="${base - 1}">${esc(spUi.place.name)}</button>`]
+    .concat(spUi.stack.slice(base).map((f, i) => `› <button data-crumb="${i + base}">${esc(f.name)}</button>`)).join(' ');
+  $('#spList').innerHTML = '<p class="note" style="padding:.6rem">Loading…</p>';
+  try {
+    const items = await ms.conn.files.list(spUi.place.drive, cur ? cur.id : null);
+    items.sort((a, b) => (!!b.folder - !!a.folder) || a.name.localeCompare(b.name, undefined, { numeric: true }));
+    spUi.items = items;
+    const rx = spUi.opts.accept || /./;
+    $('#spList').innerHTML = items.length ? items.map((it, i) => {
+      const ok = it.folder || rx.test(it.name);
+      return `<div class="it${ok ? '' : ' off'}" data-i="${i}">${it.folder ? '📁' : spUi.opts.multiple && ok ? `<input type="checkbox" data-i="${i}" aria-label="Choose ${esc(it.name)}">` : '📄'}<span class="nm">${esc(it.name)}</span><span class="sz">${it.folder ? plural(it.folder.childCount || 0, 'item') : mb(it.size || 0)}</span></div>`;
+    }).join('') : '<p class="note" style="padding:.6rem">This folder is empty.</p>';
+    const n = items.filter(it => !it.folder).length, usable = items.filter(it => !it.folder && rx.test(it.name)).length;
+    $('#spMsg').textContent = n && usable < n ? `Only ${spUi.opts.accept ? 'files of the right type' : 'files'} can be chosen here; ${n - usable} other file${n - usable === 1 ? ' is' : 's are'} greyed out.` : '';
+  } catch (e) { $('#spList').innerHTML = `<p class="err" style="padding:.6rem">${esc(e.message || e)}</p>`; }
+}
+function spClose(result) { $('#spDlg').hidden = true; const d = spUi.done; spUi.done = null; if (d) d(result); }
+async function spFinish() {
+  const chosen = [...spUi.picked].map(i => spUi.items[i]); if (!chosen.length) return;
+  const btn = $('#spOpen'); btn.disabled = true;
+  try {
+    const files = [];
+    for (let k = 0; k < chosen.length; k++) {
+      const it = chosen[k];
+      files.push(await ms.conn.files.download(spUi.place.drive, it, f => { $('#spMsg').textContent = `Downloading ${it.name}${chosen.length > 1 ? ` (${k + 1} of ${chosen.length})` : ''}… ${Math.round(f * 100)}%`; }));
+    }
+    spClose(files);
+  } catch (e) { $('#spMsg').innerHTML = `<span class="err">${esc(e.message || e)}</span>`; btn.disabled = false; }
+}
+function wireSpDialog() {
+  $('#spCancel').onclick = () => spClose(null);
+  $('#spOpen').onclick = spFinish;
+  $('#spDlg').addEventListener('keydown', e => { if (e.key === 'Escape') spClose(null); });
+  $('#spCrumbs').onclick = e => { const c = e.target.closest('[data-crumb]'); if (!c) return; spUi.stack = spUi.stack.slice(0, +c.dataset.crumb + 1); spLoad(); };
+  $('#spList').addEventListener('click', e => {
+    const row = e.target.closest('.it'); if (!row || row.classList.contains('off')) return;
+    const i = +row.dataset.i, it = spUi.items[i];
+    if (it.folder) { spGo(null, { id: it.id, name: it.name }); return; }
+    if (spUi.opts.multiple) { const cb = row.querySelector('input'); if (e.target !== cb) cb.checked = !cb.checked; cb.checked ? spUi.picked.add(i) : spUi.picked.delete(i); }
+    else { spUi.picked = new Set([i]); for (const r of $$('#spList .it')) r.style.outline = r === row ? '2px solid var(--focus)' : ''; }
+    $('#spOpen').disabled = !spUi.picked.size;
+    $('#spOpen').textContent = spUi.picked.size > 1 ? `Open ${spUi.picked.size} files` : 'Open';
+  });
+  $('#spList').addEventListener('dblclick', e => { const row = e.target.closest('.it'); if (row && !row.classList.contains('off') && !spUi.items[+row.dataset.i].folder && !spUi.opts.multiple) spFinish(); });
 }
 
 /* ---------- open spec ---------- */
@@ -4721,6 +4913,7 @@ function init() {
   document.addEventListener('click', e => {
     const o = e.target.closest('[data-popen]'); if (o) { openProject(o.dataset.popen); return; }
     const f = e.target.closest('[data-pfile]'); if (f) { saveProjectFile(f.dataset.pfile); return; }
+    const sp = e.target.closest('[data-psp]'); if (sp) { saveProjectToSharePoint(sp.dataset.psp); return; }
     const d = e.target.closest('[data-pdel]');
     if (d) {
       if (d.dataset.confirm === '1') deleteProject(d.dataset.pdel);
@@ -4741,6 +4934,7 @@ function init() {
   $('#btnSplitSize').onclick = e => runSplitBySize('spec', e.currentTarget);
   $('#btnDwgOnly').onclick = () => { document.body.classList.remove('no-doc'); $('.tabs').hidden = false; renderSecList(); setTab('drawings'); };
   $('#pvClose').onclick = closePreview;
+  wireSpDialog();
   document.addEventListener('click', e => { const g = e.target.closest('[data-tab-go]'); if (g) setTab(g.dataset.tabGo); });
   $('#preview').addEventListener('click', e => { if (e.target.id === 'preview') closePreview(); });
   $('#pvCanvas').onclick = () => $('#preview').classList.toggle('zoom');
@@ -4764,6 +4958,13 @@ function init() {
     if (c) { const p = state.pageMap[+c.dataset.page - 1]; if (p && p.primary) { state.current = p.primary; renderSecList(); setTab('section'); } }
   });
   (async () => {
+    if (!(window.claude && typeof window.claude.use === 'function') && window.SD) {
+      // outside claude.ai: normal downloads, and Claude and SharePoint through CIM's Microsoft 365 setup
+      ms.conn = await window.SD.connect().catch(e => ({ configured: true, signedIn: false, error: String(e && e.message || e), downloads: null }));
+      caps.downloads = ms.conn.downloads || null; caps.sample = ms.conn.sample || null;
+      drawMsAccount();
+      if ($('#pane-projects') && !$('#pane-projects').hidden) showProjects(); else renderRecent();
+    }
     if (window.claude && typeof window.claude.use === 'function') {
       const [s, d] = await Promise.all([window.claude.use('sample').catch(() => null), window.claude.use('downloads').catch(() => null)]);
       caps.sample = s; caps.downloads = d;

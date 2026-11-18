@@ -10,13 +10,20 @@ const LIB = {
   'xlsx/0.18.5/xlsx.full.min.js': 'node_modules/xlsx/dist/xlsx.full.min.js',
 };
 exports.FX = f => path.join(H, 'fixtures', f);
-exports.setup = async (app, { mock = true } = {}) => {
+exports.setup = async (app, opts = {}) => {
+  const { mock = true } = opts;
   const browser = await chromium.launch({ args: ['--js-flags=--max-old-space-size=8192'] });
   const ctx = await browser.newContext({ viewport: { width: 1400, height: 1000 } });
+  for (const sc of opts.initScripts || []) await ctx.addInitScript(sc);
   if (mock) await ctx.addInitScript({ path: path.join(H, 'mock-claude.js') });
   await ctx.route('**/*', async route => {
     const u = route.request().url();
-    if (u.startsWith('http://specdesk.test/')) return route.fulfill({ path: app, contentType: 'text/html' });
+    if (opts.route && await opts.route(route, u)) return;
+    if (u.startsWith('http://specdesk.test/')) {   // the page and the files next to it (config.js, m365.js, vendor/)
+      const rel = decodeURIComponent(new URL(u).pathname).replace(/^\//, ''), f = rel ? path.join(path.dirname(app), rel) : app;
+      if (!fs.existsSync(f) || !fs.statSync(f).isFile()) return route.fulfill({ status: 404, body: '' });
+      return route.fulfill({ path: f, contentType: f.endsWith('.html') ? 'text/html' : f.endsWith('.js') ? 'application/javascript' : 'application/octet-stream' });
+    }
     const lib = Object.keys(LIB).find(k => u.endsWith(k));
     if (lib) return route.fulfill({ path: path.join(H, LIB[lib]), contentType: 'application/javascript' });
     if (/fonts\.(googleapis|gstatic)/.test(u)) return route.fulfill({ body: '', contentType: 'text/css' });
@@ -37,6 +44,7 @@ exports.setup = async (app, { mock = true } = {}) => {
   await cdp.send('Performance.enable');
   const heapMB = async () => { const m = await cdp.send('Performance.getMetrics'); const g = k => (m.metrics.find(x => x.name === k) || {}).value || 0; return Math.round(g('JSHeapUsedSize') / 1e6); };
   const rssMB = () => { try { return Math.round(require('child_process').execSync("ps -eo rss=,args= | grep -i -E 'chrom|headless_shell' | grep -v grep || true").toString().split('\n').filter(Boolean).reduce((n, x) => n + (parseInt(x, 10) || 0), 0) / 1024); } catch { return -1; } };
+  if (opts.beforeGoto) await opts.beforeGoto(page, ctx);
   await page.goto('http://specdesk.test/');
   await page.waitForTimeout(500);
   const done = async (file) => {
@@ -45,5 +53,5 @@ exports.setup = async (app, { mock = true } = {}) => {
     console.log(`\n${results.filter(r => r.ok).length}/${results.length} passed`);
     await browser.close();
   };
-  return { browser, ctx, page, log, ev, calls, shot, errors, results, heapMB, rssMB, done };
+  return { browser, ctx, page, errorsRef: errors, log, ev, calls, shot, errors, results, heapMB, rssMB, done };
 };
