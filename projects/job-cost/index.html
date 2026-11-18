@@ -9,6 +9,7 @@
 <script src="vendor/msal-browser.min.js"></script>
 <script src="config.js"></script>
 <script src="m365.js"></script>
+<script src="demo.js"></script>
 <style>
 :root{
   --bg:#F3F4F6; --surface:#FFFFFF; --surface2:#F8F8FA; --ink:#1A1F2E; --body:#3F4656; --muted:#636B7A; --line:#DFE2E8;
@@ -131,7 +132,7 @@ const initials = n => String(n).split(/\s+/).map(p => p[0] || '').join('').toUpp
 async function initDb(){
   const timer = setTimeout(() => { if (!S.loaded) { S.loadErr = 'Shared data did not load within 10 seconds. You can still load a timecard file, but saved jobs, distances and WIP entries are not available in this view.'; S.loaded = true; render(); } }, 10000);
   let conn;
-  try { conn = await JCM365.connect(); } catch(e) { conn = {state:'error', message: (e && e.message) || 'Sign-in failed.'}; }
+  try { conn = await ((window.JCDemo && JCDemo.isDemo()) ? JCDemo.connect() : JCM365.connect()); } catch(e) { conn = {state:'error', message: (e && e.message) || 'Sign-in failed.'}; }
   S.conn = conn; renderAcct();
   if (conn.state !== 'ready') { clearTimeout(timer); S.loaded = true; S.canWrite = false; S.gate = conn; render(); return; }
   const db = conn.db; S.db = db;
@@ -145,7 +146,7 @@ async function initDb(){
 }
 function renderAcct(){
   const el = $('#acct'), c = S.conn; if (!el || !c || !c.account) return;
-  el.innerHTML = '<span>' + esc(c.account.name) + '</span><button class="linkbtn" id="signout">Sign out</button>'; $('#signout').onclick = c.signOut;
+  el.innerHTML = c.demo ? '<span>Demo copy</span><button class="linkbtn" id="signout">Reset demo</button>' : '<span>' + esc(c.account.name) + '</span><button class="linkbtn" id="signout">Sign out</button>'; $('#signout').onclick = c.signOut;
 }
 function viewGate(){
   const g = S.gate;
@@ -155,9 +156,12 @@ function viewGate(){
 }
 function setupPanel(){
   const st = S.setupImport;
-  return '<div class="panel stack" style="border-color:var(--navy)"><h2 style="margin:0">One-time setup: load the jobs</h2><p class="note" style="margin:0">The Job Cost list in SharePoint is empty. Load the starting setup file (job-cost-setup.json) to add the 83 jobs with their Sage and Innergy numbers and distances, the job-to-job distances, the mileage rate and the installers&#8217; home bases.</p>' +
+  const demo = S.conn && S.conn.demo;
+  return '<div class="panel stack" style="border-color:var(--navy)"><h2 style="margin:0">' + (demo ? 'Demo setup: load the jobs' : 'One-time setup: load the jobs') + '</h2><p class="note" style="margin:0">' + (demo
+      ? 'This demo copy is empty. Load job-cost-demo.json for the jobs plus sample trips and Sage costs, or job-cost-setup.json for the jobs only. Either file stays in this browser.'
+      : 'The Job Cost list in SharePoint is empty. Load the starting setup file (job-cost-setup.json) to add the 83 jobs with their Sage and Innergy numbers and distances, the job-to-job distances, the mileage rate and the installers&#8217; home bases.') + '</p>' +
     (st ? '<p style="margin:0"><b>' + (st.done < st.total ? 'Loading ' + st.done + ' of ' + st.total + '&#8230;' : 'Loaded ' + st.total + ' items.') + '</b>' + (st.failed ? ' ' + st.failed + ' couldn&#8217;t be saved; load the file again to retry them.' : '') + '</p>'
-        : '<div class="row"><button class="btn primary" data-act="setupfile">Choose job-cost-setup.json</button><span class="note">The file you were given with this version. It isn&#8217;t stored on the website.</span></div>') + '</div>';
+        : '<div class="row"><button class="btn primary" data-act="setupfile">' + (demo ? 'Choose a setup file' : 'Choose job-cost-setup.json') + '</button><span class="note">The file you were given with this version. It isn&#8217;t stored on the website.</span></div>') + '</div>';
 }
 async function loadSetup(file){
   let parsed; try { parsed = JSON.parse(await file.text()); } catch(e) { S.err = 'That isn&#8217;t the Job Cost setup file.'; return render(); }
@@ -519,7 +523,8 @@ function render(){
   const r = route();
   document.querySelectorAll('#nav a').forEach(a => a.setAttribute('aria-current', a.getAttribute('href') === '#'+r ? 'page' : 'false'));
   const app = $('#app');
-  const banner = (S.msg ? '<div class="okmsg" role="status">' + esc(S.msg) + '</div>' : '') + (S.err ? '<div class="errmsg" role="alert">' + S.err + '</div>' : '') + (S.loadErr ? '<div class="errmsg">' + esc(S.loadErr) + '</div>' : '');
+  const demoNote = S.conn && S.conn.demo ? '<div class="errmsg" role="note">Demo copy: everything you enter is saved in this browser only. It isn&#8217;t shared and doesn&#8217;t reach SharePoint, so don&#8217;t use it for real payroll or month-end.' + (S.conn.storageOk ? '' : ' This browser is blocking storage, so the demo resets when you close the page.') + '</div>' : '';
+  const banner = demoNote + (S.msg ? '<div class="okmsg" role="status">' + esc(S.msg) + '</div>' : '') + (S.err ? '<div class="errmsg" role="alert">' + S.err + '</div>' : '') + (S.loadErr ? '<div class="errmsg">' + esc(S.loadErr) + '</div>' : '');
   if (!S.loaded) { app.innerHTML = '<p class="note">Loading shared jobs and distances&#8230;</p>'; return; }
   if (S.gate) { document.body.classList.remove('phone'); app.innerHTML = viewGate(); bind('gate'); return; }
   document.body.classList.toggle('phone', r === 'trip');

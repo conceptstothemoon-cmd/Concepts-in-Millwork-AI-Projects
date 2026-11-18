@@ -11,6 +11,10 @@ A working tool for CIM Accounting:
 
 <https://conceptstothemoon-cmd.github.io/Concepts-in-Millwork-AI-Projects/projects/job-cost/>: sign in with your CIM Microsoft 365 account. Installers get the link ending in `#trip` from the Start page's **Copy link** button. Until IT connects it (see [setup/SETUP.md](setup/SETUP.md)), the page says "Not connected yet".
 
+## Offline demo
+
+Double-click `index.html` (or add `?demo=1` to the address) to try the pilot without signing in. Everything is saved in that browser only: nothing is shared and nothing reaches SharePoint, so it's for demos, not real payroll or month-end. It starts empty; load `job-cost-demo.json` (jobs plus sample trips and Sage costs) or `job-cost-setup.json` (jobs only). Both files are kept out of this repository. **Reset demo** in the top right clears it. The normal site never switches to demo mode on its own.
+
 ## Where the data is
 
 - **Jobs, distances, settings, trips, mileage, parking, imports, WIP entries, reviews and closes:** the `Job Cost Data` SharePoint list in CIM's Microsoft 365.
