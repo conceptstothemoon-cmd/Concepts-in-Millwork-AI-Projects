@@ -33,7 +33,7 @@ app.http('claude', {
   authLevel: 'anonymous', // access is checked with the Microsoft 365 token in handler.js
   handler: async (request, context) => {
     const out = await handle(
-      { authorization: request.headers.get('authorization'), rawBody: await request.text() },
+      { authorization: request.headers.get('authorization'), contentLength: request.headers.get('content-length'), readBody: () => request.text() },
       { ...deps, log: m => context.log(m) },
     );
     if (out.json) return { status: out.status, jsonBody: out.json };

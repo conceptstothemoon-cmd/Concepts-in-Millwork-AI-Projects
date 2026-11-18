@@ -90,34 +90,41 @@ export function errorFor(e) {
   return { status: 500, code: 'server_error', error: 'Something went wrong.', log: String(e && e.stack || e) };
 }
 
-// Handles one request. deps: { client, auth: {jwks, tenantId, clientId}, env, log, pingMs, timeoutMs }.
+// Handles one request. req: { authorization, contentLength, readBody() } (or rawBody, in tests).
+// deps: { client, auth: {jwks, tenantId, clientId}, env, log, pingMs, timeoutMs }.
 // Returns {status, json} for errors found before Claude is called, or {status: 200, stream} with the NDJSON reply.
-export async function handle({ authorization, rawBody }, deps) {
-  const user = await checkUser(authorization, deps.auth);
+// The sign-in is checked before the body is read, so nobody without it can make the function hold a large upload.
+export async function handle(req, deps) {
+  const user = await checkUser(req.authorization, deps.auth);
   if (!user) return { status: 401, json: { error: 'Sign in with your CIM Microsoft 365 account.', code: 'not_granted' } };
+  if (+req.contentLength > LIMITS.bodyBytes) return { status: 413, json: { error: 'That request is too large.', code: 'prompt_too_large' } };
   let input;
-  try { input = parseBody(rawBody); } catch (e) { return { status: e.status || 400, json: { error: e.message, code: e.status === 413 ? 'prompt_too_large' : 'invalid_request' } }; }
+  try { input = parseBody(typeof req.readBody === 'function' ? await req.readBody() : req.rawBody); } catch (e) { return { status: e.status || 400, json: { error: e.message, code: e.status === 413 ? 'prompt_too_large' : 'invalid_request' } }; }
   const set = settingsFor(input.tier, deps.env || {});
   const enc = new TextEncoder();
   const line = obj => enc.encode(JSON.stringify(obj) + '\n');
+  // Stopped when the page goes away (Stop, closed tab) or after 9 minutes, so Claude isn't left working and billing.
+  const abort = new AbortController();
+  if (req.signal) req.signal.addEventListener('abort', () => abort.abort(), { once: true });
   const stream = new ReadableStream({
+    cancel() { abort.abort(); },
     async start(ctl) {
-      const ping = setInterval(() => { try { ctl.enqueue(line({ ping: 1 })); } catch { /* closed */ } }, deps.pingMs || 10000);
-      const abort = new AbortController();
+      const send = obj => { try { ctl.enqueue(line(obj)); } catch { /* the page has gone */ } };
+      const ping = setInterval(() => send({ ping: 1 }), deps.pingMs || 10000);
       const timer = setTimeout(() => abort.abort(), deps.timeoutMs || 9 * 60 * 1000);
       try {
         const msg = await deps.client.beta.messages.stream(requestFor(input, set), { signal: abort.signal }).finalMessage();
         const text = (msg.content || []).filter(b => b.type === 'text').map(b => b.text).join('').trim();
         const u = msg.usage || {};
         deps.log && deps.log(`claude ok user=${user} tier=${input.tier} images=${input.images.length} in=${u.input_tokens} out=${u.output_tokens} stop=${msg.stop_reason}`);
-        ctl.enqueue(line({ done: true, text, stop_reason: msg.stop_reason, model: msg.model }));
+        send({ done: true, text, stop_reason: msg.stop_reason, model: msg.model });
       } catch (e) {
         const r = errorFor(e);
         if (r.log && deps.log) deps.log(r.log);
-        ctl.enqueue(line({ error: r.error, code: r.code }));
+        send({ error: r.error, code: r.code });
       } finally {
         clearInterval(ping); clearTimeout(timer);
-        ctl.close();
+        try { ctl.close(); } catch { /* already cancelled */ }
       }
     },
   });

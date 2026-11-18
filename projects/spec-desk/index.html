@@ -2473,7 +2473,19 @@ async function saveProjectToSharePoint(id) {
   try {
     say('Building file…');
     const { name, blob } = await buildProjectBlob(id);
-    const where = await ms.conn.files.saveProject(name, blob, f => say(`Uploading… ${Math.round(f * 100)}%`));
+    const up = f => say(`Uploading… ${Math.round(f * 100)}%`);
+    let where;
+    try { where = await ms.conn.files.saveProject(name, blob, up); }
+    catch (e) {
+      if (e.code !== 'exists') throw e;
+      const who = [e.by && `saved by ${e.by}`, e.at && `on ${fmtDate(e.at)}`].filter(Boolean).join(' ');
+      if (!confirm(`“${name}” is already in ${e.where}${who ? ` (${who})` : ''}.\n\nReplace it with this project? SharePoint keeps the earlier version in its version history.`)) {
+        if (st) st.textContent = 'Not saved: a project file with that name is already in SharePoint. Rename this project (the name box at the top) and save again, or replace it.';
+        if (btn) { btn.disabled = false; btn.textContent = 'Save to SharePoint'; }
+        return;
+      }
+      where = await ms.conn.files.saveProject(name, blob, up, { replace: true });
+    }
     if (st) st.textContent = `Saved “${name}” (${mb(blob.size)}) to ${where}. Anyone with access to that folder can open it with “Open from SharePoint”.`;
   } catch (e) { if (st) st.innerHTML = `<span class="err">Couldn’t save to SharePoint: ${esc(e.message || e)}</span>`; else alertBar('Couldn’t save to SharePoint: ' + (e.message || e)); }
   if (btn) { btn.disabled = false; btn.textContent = 'Save to SharePoint'; }
@@ -4777,10 +4789,11 @@ const spUi = { place: null, stack: [], items: [], picked: new Set(), opts: null,
 function spPick(opts) {
   return new Promise(resolve => {
     if (spUi.done) spUi.done(null);
-    Object.assign(spUi, { opts, done: resolve, picked: new Set(), stack: [], items: [] });
+    Object.assign(spUi, { opts, done: resolve, picked: new Set(), stack: [], items: [], back: document.activeElement, note: '' });
     $('#spTitle').textContent = opts.title || 'Open from SharePoint';
     $('#spMsg').textContent = ''; $('#spOpen').disabled = true; $('#spOpen').textContent = 'Open';
     $('#spDlg').hidden = false;
+    $('#spPlace').focus();
     spStart();
   });
 }
@@ -4790,8 +4803,8 @@ async function spStart() {
   try {
     const places = await f.places();
     if (spUi.opts.startInProjects) {
-      const h = await f.projectsHome();
-      places.unshift({ id: 'proj', name: h.where, drive: h.drive, root: h.id });
+      try { const h = await f.projectsHome(); if (h) places.unshift({ id: 'proj', name: h.where, drive: h.drive, root: h.id }); else spUi.note = 'Nobody has saved a project to SharePoint yet, so the shared projects folder doesn’t exist. Look elsewhere, or save one first.'; }
+      catch (e) { spUi.note = `The shared projects folder couldn’t be opened (${e.message || e}). You can still look elsewhere.`; }
     }
     spUi.places = places;
     sel.innerHTML = places.map((p, i) => `<option value="${i}">${esc(p.name)}</option>`).join('');
@@ -4818,29 +4831,42 @@ async function spLoad() {
     const rx = spUi.opts.accept || /./;
     $('#spList').innerHTML = items.length ? items.map((it, i) => {
       const ok = it.folder || rx.test(it.name);
-      return `<div class="it${ok ? '' : ' off'}" data-i="${i}">${it.folder ? '📁' : spUi.opts.multiple && ok ? `<input type="checkbox" data-i="${i}" aria-label="Choose ${esc(it.name)}">` : '📄'}<span class="nm">${esc(it.name)}</span><span class="sz">${it.folder ? plural(it.folder.childCount || 0, 'item') : mb(it.size || 0)}</span></div>`;
+      return `<div class="it${ok ? '' : ' off'}" data-i="${i}" role="option" tabindex="${ok ? 0 : -1}" aria-disabled="${!ok}">${it.folder ? '📁' : spUi.opts.multiple && ok ? `<input type="checkbox" data-i="${i}" aria-label="Choose ${esc(it.name)}">` : '📄'}<span class="nm">${esc(it.name)}</span><span class="sz">${it.folder ? plural(it.folder.childCount || 0, 'item') : mb(it.size || 0)}</span></div>`;
     }).join('') : '<p class="note" style="padding:.6rem">This folder is empty.</p>';
     const n = items.filter(it => !it.folder).length, usable = items.filter(it => !it.folder && rx.test(it.name)).length;
-    $('#spMsg').textContent = n && usable < n ? `Only ${spUi.opts.accept ? 'files of the right type' : 'files'} can be chosen here; ${n - usable} other file${n - usable === 1 ? ' is' : 's are'} greyed out.` : '';
+    $('#spMsg').textContent = [spUi.note, n && usable < n ? `Only ${spUi.opts.accept ? 'files of the right type' : 'files'} can be chosen here; ${n - usable} other file${n - usable === 1 ? ' is' : 's are'} greyed out.` : ''].filter(Boolean).join(' ');
   } catch (e) { $('#spList').innerHTML = `<p class="err" style="padding:.6rem">${esc(e.message || e)}</p>`; }
 }
-function spClose(result) { $('#spDlg').hidden = true; const d = spUi.done; spUi.done = null; if (d) d(result); }
+function spClose(result) { $('#spDlg').hidden = true; const d = spUi.done; spUi.done = null; spUi.busy = false; if (d) d(result); if (spUi.back && spUi.back.focus) spUi.back.focus(); }
 async function spFinish() {
-  const chosen = [...spUi.picked].map(i => spUi.items[i]); if (!chosen.length) return;
+  const chosen = [...spUi.picked].map(i => spUi.items[i]); if (!chosen.length || spUi.busy) return;
+  const mine = spUi.done, place = spUi.place;       // a late download must not fill a picker opened since
+  spUi.busy = true;
   const btn = $('#spOpen'); btn.disabled = true;
   try {
     const files = [];
     for (let k = 0; k < chosen.length; k++) {
       const it = chosen[k];
-      files.push(await ms.conn.files.download(spUi.place.drive, it, f => { $('#spMsg').textContent = `Downloading ${it.name}${chosen.length > 1 ? ` (${k + 1} of ${chosen.length})` : ''}… ${Math.round(f * 100)}%`; }));
+      files.push(await ms.conn.files.download(place.drive, it, f => { if (spUi.done === mine) $('#spMsg').textContent = `Downloading ${it.name}${chosen.length > 1 ? ` (${k + 1} of ${chosen.length})` : ''}… ${Math.round(f * 100)}%`; }));
+      if (spUi.done !== mine) return;                // cancelled while downloading
     }
     spClose(files);
-  } catch (e) { $('#spMsg').innerHTML = `<span class="err">${esc(e.message || e)}</span>`; btn.disabled = false; }
+  } catch (e) { if (spUi.done === mine) { $('#spMsg').innerHTML = `<span class="err">${esc(e.message || e)}</span>`; btn.disabled = false; } }
+  finally { spUi.busy = false; }
 }
 function wireSpDialog() {
   $('#spCancel').onclick = () => spClose(null);
   $('#spOpen').onclick = spFinish;
-  $('#spDlg').addEventListener('keydown', e => { if (e.key === 'Escape') spClose(null); });
+  $('#spDlg').addEventListener('keydown', e => {
+    if (e.key === 'Escape') { spClose(null); return; }
+    const row = e.target.closest && e.target.closest('#spList .it');
+    if (row && (e.key === 'Enter' || e.key === ' ')) {
+      e.preventDefault();
+      const it = spUi.items[+row.dataset.i];
+      if (e.key === 'Enter' && !it.folder && !spUi.opts.multiple && spUi.picked.has(+row.dataset.i)) { spFinish(); return; }
+      row.click();
+    }
+  });
   $('#spCrumbs').onclick = e => { const c = e.target.closest('[data-crumb]'); if (!c) return; spUi.stack = spUi.stack.slice(0, +c.dataset.crumb + 1); spLoad(); };
   $('#spList').addEventListener('click', e => {
     const row = e.target.closest('.it'); if (!row || row.classList.contains('off')) return;

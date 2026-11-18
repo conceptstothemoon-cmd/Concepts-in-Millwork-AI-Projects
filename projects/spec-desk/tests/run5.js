@@ -74,6 +74,16 @@ const fs = require('fs');
   log('Sign in asks for Graph file access and the Spec Desk API scope, for this tenant and app', st.login.scopes.includes('Files.ReadWrite.All') && st.login.extraScopesToConsent[0] === `api://${CONFIG.clientId}/access_as_user` && st.msal.clientId === CONFIG.clientId && st.msal.authority.endsWith(CONFIG.tenantId), JSON.stringify(st.login));
   await shot('50-m365-signed-in');
 
+  // before anyone has saved a project: the browser still opens (other places), and creates no folder
+  await page.click('#btnProjects'); await page.waitForSelector('#btnProjSp'); await page.click('#btnProjSp');
+  await page.waitForSelector('#spDlg:not([hidden]) .it');
+  const early = await ev(() => ({ places: [...document.querySelectorAll('#spPlace option')].map(o => o.textContent).join(), msg: document.querySelector('#spMsg').textContent, focus: document.activeElement.id }));
+  log('Open from SharePoint before any project is saved: other places still offered, nothing created', early.places === 'Estimating (SharePoint),My OneDrive' && /Nobody has saved a project/.test(early.msg) && !graph.find('site', 'Spec Desk Projects'), JSON.stringify(early));
+  await page.keyboard.press('Escape');
+  log('The file browser takes the keyboard focus when it opens, and Escape closes it', early.focus === 'spPlace' && await page.locator('#spDlg').isHidden(), early.focus);
+  await page.click('#btnNewProj');   // back to an empty project
+  await page.waitForSelector('#drop label[for="fileInput"]');
+
   // open the spec book from SharePoint
   await page.click('.sp-pick[data-sp-for="fileInput"]:visible');
   await page.waitForSelector('#spDlg:not([hidden]) .it');
@@ -184,6 +194,20 @@ const fs = require('fs');
     await page.waitForTimeout(1500);
     const back = await ev(() => ({ secs: state.sections.length, cmp: state.cmpItems.length, sets: state.dwg.sets.length, reviews: (state.reviews || []).length, checked: !!state.cmpCheck, name: state.project && state.project.name }));
     log('The whole project comes back: spec book, comparison and its checks, drawings, drawing review', back.secs === 3 && back.cmp > 0 && back.sets === 2 && back.reviews === 1 && back.checked, JSON.stringify(back));
+    // the opened project has the same name as the file already in SharePoint: saving asks before replacing it
+    await page.click('#btnProjects'); await page.waitForSelector('[data-psp]');
+    const uploadsBefore = graph.log.filter(x => x.kind === 'chunk' || x.kind === 'simple-upload').length;
+    let asked = '';
+    page.once('dialog', d => { asked = d.message(); d.dismiss(); });
+    await page.click('[data-psp]');
+    await page.waitForFunction(() => /Not saved/.test(document.querySelector('#projStatus').textContent), null, { timeout: 30000 });
+    const noUpload = graph.log.filter(x => x.kind === 'chunk' || x.kind === 'simple-upload').length === uploadsBefore;
+    page.once('dialog', d => d.accept());
+    await page.click('[data-psp]');
+    await page.waitForFunction(() => /Saved “/.test(document.querySelector('#projStatus').textContent), null, { timeout: 30000 });
+    const replaced = graph.log.filter(x => x.kind === 'chunk' || x.kind === 'simple-upload').length > uploadsBefore;
+    log('Saving over a project file already in SharePoint asks first; "Cancel" keeps the old one, "OK" replaces it', /already in Estimating › Spec Desk Projects/.test(asked) && noUpload && replaced, asked.split('\n')[0]);
+
     // pick two drawing PDFs in one go (tick both)
     await page.click('.tabs button[data-tab="drawings"]');
     await page.selectOption('#dwgKind', 'Other drawings');

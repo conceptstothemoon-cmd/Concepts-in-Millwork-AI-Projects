@@ -131,7 +131,7 @@ window.SD = (() => {
     catch { throw fail('network', 'Couldn’t reach Microsoft 365.'); }
     if (!res.ok) {
       let m = ''; try { m = (await res.json()).error.message; } catch { /* no body */ }
-      throw fail({ 401: 'not_granted', 403: 'not_granted', 404: 'not_found' }[res.status] || 'graph_error', m || `Microsoft 365 request failed (${res.status})`);
+      throw Object.assign(fail({ 401: 'not_granted', 403: 'not_granted', 404: 'not_found' }[res.status] || 'graph_error', m || `Microsoft 365 request failed (${res.status})`), { status: res.status });
     }
     return res;
   }
@@ -175,16 +175,28 @@ window.SD = (() => {
     const type = /\.pdf$/i.test(item.name) ? 'application/pdf' : /\.zip$/i.test(item.name) ? 'application/zip' : (blob.type || '');
     return new File([blob], item.name, { type, lastModified: Date.parse(meta.lastModifiedDateTime) || Date.now() });
   }
-  async function projectsHome() {
+  // The shared projects folder. Only saving creates it (create: true); browsing just looks for it and
+  // returns null when it isn't there yet.
+  async function projectsHome({ create = false } = {}) {
     const folder = C.projectsFolder || 'Spec Desk Projects';
     const drive = siteOn() ? (await siteDrive()).drive : '/me/drive';
+    const lookup = () => gjson(`${drive}/root:/${enc(folder)}?$select=id,name`);
     let item;
-    try { item = await gjson(`${drive}/root:/${enc(folder)}?$select=id,name`); }
+    try { item = await lookup(); }
     catch (e) {
       if (e.code !== 'not_found') throw e;
-      item = await gjson(`${drive}/root/children`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: folder, folder: {}, '@microsoft.graph.conflictBehavior': 'fail' }) });
+      if (!create) return null;
+      try { item = await gjson(`${drive}/root/children`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: folder, folder: {}, '@microsoft.graph.conflictBehavior': 'fail' }) }); }
+      catch (e2) { if (e2.status !== 409) throw e2; item = await lookup(); }   // someone else created it at the same moment
     }
     return { drive, folder, id: item.id, where: siteOn() ? `${site.name} › ${folder}` : `OneDrive › ${folder}` };
+  }
+  // Is there already a file with this name in the projects folder? Returns who saved it and when, or null.
+  async function existing(drive, folder, name) {
+    try {
+      const it = await gjson(`${drive}/root:/${enc(folder)}/${encodeURIComponent(name)}?$select=id,name,lastModifiedDateTime,lastModifiedBy`);
+      return { by: (it.lastModifiedBy && it.lastModifiedBy.user && it.lastModifiedBy.user.displayName) || '', at: it.lastModifiedDateTime || '' };
+    } catch (e) { if (e.code === 'not_found') return null; throw e; }
   }
   async function upload(drive, folder, name, blob, onPct) {
     const path = `${drive}/root:/${enc(folder)}/${encodeURIComponent(name)}`;
@@ -221,7 +233,12 @@ window.SD = (() => {
       files: {
         places, list, download,
         projectsHome,
-        saveProject: async (name, blob, onPct) => { const h = await projectsHome(); await upload(h.drive, h.folder, name, blob, onPct); return h.where; },
+        // Refuses with code 'exists' (and who saved it, when) unless replace is set, so nobody overwrites a colleague's project by accident.
+        saveProject: async (name, blob, onPct, { replace = false } = {}) => {
+          const h = await projectsHome({ create: true });
+          if (!replace) { const ex = await existing(h.drive, h.folder, name); if (ex) throw Object.assign(fail('exists', `${name} is already in ${h.where}`), ex, { where: h.where }); }
+          await upload(h.drive, h.folder, name, blob, onPct); return h.where;
+        },
       },
     };
   }

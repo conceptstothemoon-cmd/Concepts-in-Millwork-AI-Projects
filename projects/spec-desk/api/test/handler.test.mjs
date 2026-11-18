@@ -137,3 +137,32 @@ test('a request that runs too long is stopped', async () => {
   assert.equal(lines.at(-1).code, 'server_error');
   assert.match(lines.at(-1).error, /too long/);
 });
+
+test('checks the sign-in before reading the body, and refuses oversized uploads early', async () => {
+  let read = 0;
+  const readBody = async () => { read++; return body(); };
+  let out = await handle({ authorization: null, readBody, contentLength: '50000000' }, { client: fakeClient(okMsg('x')), auth });
+  assert.equal(out.status, 401); assert.equal(read, 0, 'body not read without a sign-in');
+  out = await handle({ authorization: await token(), readBody, contentLength: String(LIMITS.bodyBytes + 1) }, { client: fakeClient(okMsg('x')), auth });
+  assert.equal(out.status, 413); assert.equal(read, 0, 'an oversized upload is refused from its declared length');
+  out = await handle({ authorization: await token(), readBody, contentLength: '100' }, { client: fakeClient(okMsg('x')), auth });
+  assert.equal(out.status, 200); assert.equal(read, 1);
+  await readAll(out.stream);
+});
+
+test('stops Claude when the page goes away (Stop pressed, tab closed)', async () => {
+  let aborted = false;
+  const client = fakeClient((req, opts) => new Promise((_, rej) => opts.signal.addEventListener('abort', () => { aborted = true; rej(new Anthropic.APIUserAbortError()); })));
+  const out = await handle({ authorization: await token(), rawBody: body() }, { client, auth, pingMs: 20 });
+  const reader = out.stream.getReader();
+  await reader.read();                 // the reply has started
+  await reader.cancel();               // the browser disconnects
+  await new Promise(r => setTimeout(r, 20));
+  assert.ok(aborted, 'the Claude request was stopped');
+  // and through the request's own signal, where the host provides one
+  aborted = false;
+  const ctl = new AbortController();
+  const out2 = await handle({ authorization: await token(), rawBody: body(), signal: ctl.signal }, { client, auth });
+  ctl.abort(); await readAll(out2.stream);
+  assert.ok(aborted);
+});

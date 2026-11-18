@@ -38,7 +38,7 @@ The page gets Claude and file saving from one of two places, chosen in the `wiri
 - **The Claude service** (`api/`): `src/handler.js` holds all logic (sign-in check with `jose`, request limits, the Claude request, NDJSON streaming with pings so Azure's 230 s idle limit doesn't cut long answers); `src/functions/claude.js` is only the Azure wiring. Model `claude-opus-5-5`, adaptive thinking, effort `high` (`low` for the quick tier), `max_tokens` 64000, streaming with `finalMessage()`, server-side refusal fallbacks. Tests: `cd api && npm test`.
 
 ## Running it locally
-- Serve the folder over http (opening `index.html` as `file://` can break the pdf.js worker), e.g. `python3 -m http.server 8000` from this folder, then open http://localhost:8000.
+- Serve the folder over http (opening `index.html` as `file://` can break the pdf.js worker), e.g. `npx serve -l 3000 .` (or `python3 -m http.server 3000`) from this folder, then open http://localhost:3000/. Port 3000 matches the Microsoft sign-in redirect address in setup/SETUP.md.
 - Very large PDFs (a 512-page, ~500 MB architectural set was tested) need Chrome on a desktop with plenty of memory.
 
 ## Testing approach used so far
