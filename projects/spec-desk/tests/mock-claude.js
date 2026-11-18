@@ -274,5 +274,6 @@
     let b64 = null;
     if (typeof data !== 'string' && data.size < 5e6) { const u = new Uint8Array(await data.arrayBuffer()); let s = ''; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); b64 = btoa(s); }
     window.__saves.push({ filename, size: typeof data === 'string' ? data.length : data.size, text: typeof data === 'string' ? data.slice(0, 20000) : null, b64 }); } };
-  window.claude = { use: async name => name === 'sample' ? sample : name === 'downloads' ? downloads : null };
+  window.__mockAnswer = (prompt, opts) => answer(prompt, opts || {});   // used by the Microsoft 365 test through the real Claude service handler
+  if (!window.__noWindowClaude) window.claude = { use: async name => name === 'sample' ? sample : name === 'downloads' ? downloads : null };
 })();
