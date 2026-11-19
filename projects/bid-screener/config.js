@@ -10,8 +10,8 @@
 // settings, never in this file or anywhere else in this repo.
 window.BS_CONFIG = {
   // Entra ID (Azure AD) app registration
-  tenantId: 'af7deae7-ee48-4c4d-8f90-8970d30a269b',        // Directory (tenant) ID
-  clientId: '51a1ef99-8648-4b7f-a9c3-756f3facb23b',        // Application (client) ID of the "CIM Bid Screener" app registration
+  tenantId: '51a1ef99-8648-4b7f-a9c3-756f3facb23b',        // Directory (tenant) ID
+  clientId: 'af7deae7-ee48-4c4d-8f90-8970d30a269b',        // Application (client) ID of the "CIM Bid Screener" app registration
 
   // SharePoint site that holds the list
   siteHostname: 'concepts365.sharepoint.com',    // e.g. 'contoso.sharepoint.com'
