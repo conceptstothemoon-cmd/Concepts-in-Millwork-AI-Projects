@@ -10,16 +10,16 @@
 // settings, never in this file or anywhere else in this repo.
 window.BS_CONFIG = {
   // Entra ID (Azure AD) app registration
-  tenantId: '',        // Directory (tenant) ID
-  clientId: '',        // Application (client) ID of the "CIM Bid Screener" app registration
+  tenantId: 'af7deae7-ee48-4c4d-8f90-8970d30a269b',        // Directory (tenant) ID
+  clientId: '51a1ef99-8648-4b7f-a9c3-756f3facb23b',        // Application (client) ID of the "CIM Bid Screener" app registration
 
   // SharePoint site that holds the list
-  siteHostname: '',    // e.g. 'contoso.sharepoint.com'
-  sitePath: '',        // e.g. '/sites/Sales'
+  siteHostname: 'concepts365.sharepoint.com',    // e.g. 'contoso.sharepoint.com'
+  sitePath: '/sites/SalesandMarketing',        // e.g. '/sites/Sales'
   listName: 'Bid Screener Data',
 
   // Azure Function that calls Claude (setup/SETUP.md, step 3). Leave blank to turn AI features off.
-  claudeEndpoint: '',  // e.g. 'https://cim-bid-screener.azurewebsites.net/api/claude'
+  claudeEndpoint: 'https://cim-bid-screener-ehd0akdweed3axf8.westus3-01.azurewebsites.net/api/claude',  // e.g. 'https://cim-bid-screener.azurewebsites.net/api/claude'
 
   // How often each open page checks SharePoint for changes other people made, in seconds.
   refreshSeconds: 45,
