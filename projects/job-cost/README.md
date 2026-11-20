@@ -9,7 +9,7 @@ A working tool for CIM Accounting:
 
 ## Open it
 
-<https://conceptstothemoon-cmd.github.io/Concepts-in-Millwork-AI-Projects/projects/job-cost/>: sign in with your CIM Microsoft 365 account. Installers get the link ending in `#trip` from the Start page's **Copy link** button. Until IT connects it (see [setup/SETUP.md](setup/SETUP.md)), the page says "Not connected yet".
+<https://conceptstothemoon-cmd.github.io/Concepts-in-Millwork-AI-Projects/projects/job-cost/>: sign in with your CIM Microsoft 365 account. Installers without a company email sign in with their Gmail once IT has invited it as a guest (see [setup/SETUP.md](setup/SETUP.md#5-installers-who-sign-in-with-gmail)). Installers get the link ending in `#trip` from the Start page's **Copy link** button. Until IT connects it (see [setup/SETUP.md](setup/SETUP.md)), the page says "Not connected yet".
 
 ## Offline demo
 

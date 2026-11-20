@@ -16,7 +16,8 @@ window.JCM365 = (() => {
   const GRAPH = 'https://graph.microsoft.com/v1.0';
   const SCOPES = ['User.Read', 'Sites.ReadWrite.All'];
   const MAX_DOC_CHARS = 60000;
-  const configured = () => Boolean(C.clientId && C.siteHostname && C.sitePath);
+  // tenantId is required: guests (installers who sign in with Gmail) can only sign in through CIM's own tenant.
+  const configured = () => Boolean(C.tenantId && C.clientId && C.siteHostname && C.sitePath);
   const fail = (code, message, status) => Object.assign(new Error(message || code), { code, status });
 
   /* ---------- Sign-in ---------- */
@@ -24,7 +25,7 @@ window.JCM365 = (() => {
   const redirectUri = () => location.origin + location.pathname.replace(/index\.html$/, '');
   async function initAuth() {
     pca = new msal.PublicClientApplication({
-      auth: { clientId: C.clientId, authority: 'https://login.microsoftonline.com/' + (C.tenantId || 'organizations'), redirectUri: redirectUri() },
+      auth: { clientId: C.clientId, authority: 'https://login.microsoftonline.com/' + C.tenantId, redirectUri: redirectUri() },
       cache: { cacheLocation: 'localStorage' },
     });
     await pca.initialize();
@@ -163,7 +164,7 @@ window.JCM365 = (() => {
     if (!configured()) return { state: 'not_configured' };
     if (!window.msal) return { state: 'error', message: 'The Microsoft sign-in library didn’t load. Reload the page.' };
     await initAuth();
-    if (!account) return { state: 'signed_out', signIn: () => pca.loginRedirect({ scopes: SCOPES }) };
+    if (!account) return { state: 'signed_out', signIn: () => pca.loginRedirect({ scopes: SCOPES, prompt: 'select_account' }) };
     const name = account.name || account.username;
     const db = makeDb();
     let timer = null;
