@@ -41,7 +41,11 @@ The Graph permissions are *delegated*: Spec Desk can only open and save what the
 
 The page can't call Claude directly: the API key would be visible to anyone who opens it. The small function in `api/` holds the key, checks that the caller is signed in to CIM's Microsoft 365, and forwards the request. It is separate from the Bid Screener's service, so Spec Desk has its own key, its own spend limit and its own usage figures.
 
-1. **Get a Claude API key.** At <https://console.anthropic.com>, use CIM's organization, create an API key named "Spec Desk", and under **Limits** set a monthly spend limit for it (see costs below).
+1. **Get a Claude API key with its own spending cap.** In the Claude Console (<https://platform.claude.com>), in CIM's organization:
+   - Create a **workspace** named `Spec Desk`, and create the API key **inside that workspace**. Spend limits are set per organization or per workspace, not per key, so a workspace of its own keeps Spec Desk's costs capped and reported separately from the Bid Screener's.
+   - **Settings → Spend limits** → under **Workspace limits** pick `Spec Desk` → **Set limit** next to "Monthly spend limit". A suggested start is $300 a month (see costs below); raise it once you see real usage.
+   - Under **Email notifications**, add an alert at about half the limit.
+   - When the limit is reached, Spec Desk's AI features stop until the 1st of the next month (00:00 UTC) or until someone raises the limit; everything else keeps working. The organization's own monthly cap from its Anthropic usage tier also applies.
 2. **Create a Function App** in the Azure portal: Runtime **Node.js 22** (20 or later works), OS Linux, plan **Flex Consumption** (recommended: long drawing reviews take a minute or two). Name it, for example `cim-spec-desk`.
 3. **App settings** (Function App → Settings → Environment variables):
 
@@ -104,7 +108,7 @@ Common errors:
 
 - **SharePoint, OneDrive and sign-in:** included in Microsoft 365.
 - **Azure Function:** a team this size normally stays inside the free monthly allowance.
-- **Claude API:** billed by Anthropic per use. The model is Claude Opus 5.5 ($4 per million input tokens, $20 per million output tokens). Spec Desk sends a lot of text and pictures, and checks each answer automatically, so it costs more per use than the Bid Screener. Rough figures, to be confirmed from the first weeks' bills: a question in Ask, a few cents to about 25 cents with its checking; comparing one spec section against a proposal, roughly $1 to $5 with checking; a drawing review of one sheet with images, roughly $1 to $5 with checking; a Deep check of several sections, several dollars or more. Turning automatic checking down (Deep check tab: fewer rounds, or off) lowers the cost. A spend limit on the API key (step 3.1) caps the bill.
+- **Claude API:** billed by Anthropic per use. The model is Claude Opus 5.5 ($4 per million input tokens, $20 per million output tokens). Spec Desk sends a lot of text and pictures, and checks each answer automatically, so it costs more per use than the Bid Screener. Rough figures, to be confirmed from the first weeks' bills: a question in Ask, a few cents to about 25 cents with its checking; comparing one spec section against a proposal, roughly $1 to $5 with checking; a drawing review of one sheet with images, roughly $1 to $5 with checking; a Deep check of several sections, several dollars or more. Turning automatic checking down (Deep check tab: fewer rounds, or off) lowers the cost. The Spec Desk workspace's monthly spend limit (step 3.1) caps the bill, and its email alert warns before it's reached.
 
 ## What runs where
 
