@@ -151,7 +151,7 @@ function renderAcct(){
 function viewGate(){
   const g = S.gate;
   if (g.state === 'not_configured') return '<h1>Not connected yet</h1><p class="lede">The Job Cost Pilot stores its jobs, trips and WIP in CIM&#8217;s SharePoint, and it hasn&#8217;t been connected yet. IT: see setup/SETUP.md in the job-cost folder.</p>';
-  if (g.state === 'signed_out') return '<h1>Sign in</h1><p class="lede">Use your Concepts in Millwork Microsoft 365 account.</p><button class="btn primary big" style="max-width:320px" data-act="signin">Sign in</button>';
+  if (g.state === 'signed_out') return '<h1>Sign in</h1><p class="lede">Use your Concepts in Millwork account. Installers without a company email: use the Gmail address CIM invited, then choose Sign in with Google (or enter the code emailed to you).</p><button class="btn primary big" style="max-width:320px" data-act="signin">Sign in</button>';
   return '<h1>The pilot couldn&#8217;t load</h1><p class="lede">' + esc(g.message || 'Reload the page.') + '</p>';
 }
 function setupPanel(){
@@ -514,7 +514,7 @@ function viewStart(){
     [hasSage, 'Abby drops in a Sage export', 'On <a href="#imports">Imports</a>: drop the file, check the preview, Import. Same file twice adds nothing.', hasSage ? 'done' : ''],
     [nRev > 0, 'Dani reviews one job', 'On <a href="#wip">WIP schedule</a>: open a job, check the cost to complete, Mark reviewed.', nRev + ' reviewed']];
   h += '<div class="panel"><h2>First week: five steps</h2><ol class="steps">' + steps.map(([on,t,d,c],i) => '<li><span class="tick' + (on?' on':'') + '" aria-label="' + (on?'Done':'Not done yet') + '">' + (on?'&#10003;':(i+1)) + '</span><div><b>' + t + '</b>' + (c && on ? ' <span class="chip ok">' + esc(c) + '</span>' : '') + '<br><span class="note">' + d + '</span></div></li>').join('') + '</ol></div>';
-  h += '<div class="panel stack"><h2 style="margin:0">Get it on installers\u2019 phones</h2><p class="note" style="margin:0">Installers sign in with their CIM Microsoft 365 account and need access to the Job Cost list. Text them this link; it opens straight to Log a trip.</p>' +
+  h += '<div class="panel stack"><h2 style="margin:0">Get it on installers\u2019 phones</h2><p class="note" style="margin:0">Installers sign in with a CIM account or with the Gmail address IT invited as a guest, and need access to the Job Cost list. Text them this link; it opens straight to Log a trip.</p>' +
     '<div class="row"><input class="inp" readonly id="share-url" style="flex:1;min-width:220px" value="' + esc(pilotUrl() ? pilotUrl() + '#trip' : 'Set the pilot link in Setup first') + '"><button class="btn small" data-act="copyurl">Copy link</button></div>' +
     '<p class="note" style="margin:0">No Microsoft 365 login for an installer yet? Tammy can open Log a trip on her own screen and send the day for them.</p></div>';
   return h;
