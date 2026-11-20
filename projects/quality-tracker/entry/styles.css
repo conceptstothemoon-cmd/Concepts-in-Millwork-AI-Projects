@@ -124,6 +124,14 @@ body {
   text-transform: uppercase;
 }
 
+.feedback-link {
+  color: #fff;
+  opacity: 0.85;
+  font-size: 13px;
+  text-decoration: underline;
+}
+.feedback-link:hover { opacity: 1; }
+
 /* Navigation tabs */
 .nav-tabs {
   display: flex;

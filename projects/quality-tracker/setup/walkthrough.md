@@ -13,19 +13,34 @@ This explains what you need to do on your end to start using the Quality Tracker
    ```
 3. You'll see two options: the **Entry app** (for reporting and updating quality issues) and the **Dashboard** (for totals, trends, and reports).
 
-Right now the tool is running in **demo mode** — it's loaded with 240 sample issues so you can click around and see how everything works. Nothing you do in demo mode is saved anywhere except your own browser, and there's a "Reset sample data" button on the home page if you want to start over.
+## Step 2: Install the Entry app on your device
 
-> Live mode, where real issues get saved to CIM's Microsoft 365 and everyone sees the same data, requires a one-time setup from IT. That's a separate step (see `setup/CIM-IT-HANDOFF.md`) and isn't something you need to do yourself.
+This makes the Entry app open like a regular app, with its own icon, instead of living in a browser tab. It still works the exact same way — this is just a shortcut. Open the Entry app first, then follow the steps for your device:
 
-## Step 2: Install the Entry app on your device (optional, but recommended)
+**iPhone or iPad (Safari):**
+1. Open the Entry app:
+   ```
+   https://conceptstothemoon-cmd.github.io/Concepts-in-Millwork-AI-Projects/projects/quality-tracker/entry/
+   ```
+2. Tap the **Share** icon — the square with an arrow pointing up, in the bottom toolbar (on iPad, it may be at the top instead).
+3. Scroll down the menu that pops up and tap **Add to Home Screen**.
+4. A preview box appears with the app name and icon already filled in — tap **Add** in the top-right corner.
+5. The app icon now appears on your Home Screen like any other app. Tap it to open.
 
-This makes the Entry app open like a regular app, with its own icon, instead of living in a browser tab. It still works the exact same way — this is just a shortcut.
+**Android (Chrome):**
+1. Open the Entry app link above.
+2. Tap the **three-dot menu** in the top-right corner of Chrome.
+3. Tap **Install app** (or **Add to Home screen**, depending on your Android version).
+4. Confirm by tapping **Install** in the popup.
+5. The app icon is added to your Home Screen or app drawer. Tap it to open.
 
-- **iPhone/iPad (Safari):** Open the Entry app link → tap the **Share** button → **Add to Home Screen**.
-- **Android (Chrome):** Open the Entry app link → tap the menu (⋮) → **Install app**.
-- **Windows/Mac (Chrome or Edge):** Open the Entry app link → click the install icon on the right side of the address bar.
+**Windows or Mac (Chrome or Edge):**
+1. Open the Entry app link above.
+2. Look at the right side of the address bar — you'll see a small icon (a monitor with a down arrow in Chrome, or similar in Edge). This is the **install icon**, not a menu.
+3. Click it, then click **Install** in the popup that appears.
+4. The app opens in its own window and an icon is added to your desktop/taskbar (Windows) or Applications folder / Dock (Mac).
 
-Once installed, you can open it anytime from your home screen or desktop, even without an internet connection — though submitting an issue still requires internet.
+Once installed, you can open it anytime from your home screen, desktop, or dock, even without an internet connection — though submitting an issue still requires internet.
 
 ## Step 3: Bookmark the Dashboard
 
@@ -36,4 +51,12 @@ https://conceptstothemoon-cmd.github.io/Concepts-in-Millwork-AI-Projects/project
 
 ---
 
-That's it — no accounts to create, no software to download, and nothing more needed on your end until live mode is turned on.
+## Turning on live mode (real data, not demo)
+
+Right now the tool runs in **demo mode** — sample data only, saved just in your own browser. To switch to **live mode**, where everyone signs in with their CIM Microsoft 365 account and real issues are saved to one shared SharePoint list, four values need to be filled into `shared/config.js` in the repo: `tenantId`, `clientId`, `siteHostname`, and `sitePath`.
+
+Getting those values requires a few steps in CIM's Microsoft 365 admin center (Entra ID and SharePoint), and the app registration step specifically needs **Microsoft 365 admin rights** to grant consent. If you already have that kind of admin access yourself, you can do it — the full steps are written out in [`setup/CIM-IT-HANDOFF.md`](CIM-IT-HANDOFF.md) in this same folder. If you don't have admin rights, that document is written to hand directly to whoever at CIM does (your IT admin) — they can follow it start to finish in about 30 minutes.
+
+## Sending feedback
+
+Both the Entry app and the Dashboard now have a **Feedback** link in the header (and on the home page) that opens a pre-addressed email, so if something's confusing or you'd like a change, just click it and send your thoughts — that's how this tool gets improved over time.
