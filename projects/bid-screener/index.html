@@ -162,7 +162,7 @@ const DEFAULT_SETTINGS = {homeStates:['CO','WY','NE','KS','OK','NM','UT'], dueSo
   awardBasis:[{name:'Negotiated',score:1},{name:'Hard Bid',score:0},{name:"Don't Know",score:0.5}],
   bidTypes:[{name:'Award',score:1},{name:'Budget',score:0.4},{name:'RoM',score:0.5}]};
 
-const S = {tab:'digest', gcs:new Map(), invites:new Map(), decisions:new Map(), feedback:new Map(), estimates:new Map(), estRows:new Map(), askLog:[], askBusy:false, askDraft:'', estUpload:null, estDel:null,
+const S = {tab:'digest', gcs:new Map(), invites:new Map(), decisions:new Map(), feedback:new Map(), estimates:new Map(), estRows:new Map(), askLog:[], askBusy:false, askDraft:'', estUpload:null, estDel:null, specs:new Map(), specMem:{}, specId:null, specRun:null, innergy:null,
   settings:null, loaded:{gcs:false,invites:false}, db:null, user:null, me:null, sample:null,
   openId:null, fbOpen:false, gcQuery:'', gcTier:'All', showHandled:false, tryResult:null, tryBusy:false, tryErr:'', confirmClear:false, profiles:{}};
 try { const t = localStorage.getItem('bss-tab'); if (TABS.some(x => x.id === t)) S.tab = t; } catch (e) {}
@@ -261,7 +261,7 @@ function renderTabs(){
 function render(){
   renderTabs();
   const v = $('#view');
-  const fn = {archive:viewArchive, digest:viewDigest, review:viewReview, gcs:viewGCs, criteria:viewCriteria, try:viewTry, ask:viewAsk, estimates:viewEstimates, score:viewScore, feedback:viewFeedback}[S.tab];
+  const fn = S.specId ? () => viewSpecs(S.specId) : {archive:viewArchive, digest:viewDigest, review:viewReview, gcs:viewGCs, criteria:viewCriteria, try:viewTry, ask:viewAsk, estimates:viewEstimates, score:viewScore, feedback:viewFeedback}[S.tab];
   const active = document.activeElement; const keepId = active && active.id;
   v.innerHTML = fn();
   if (keepId){ const el = document.getElementById(keepId); if (el && el !== active && el.matches('input,textarea')) { el.focus(); try{ el.setSelectionRange(el.value.length, el.value.length);}catch(e){} } }
@@ -322,12 +322,12 @@ function viewReview(){
   const note = storeNote(); if (note) return head('Bid review', lede) + note;
   const rows = activeInvites().filter(i => S.decisions.get(i.id)?.decision === 'review');
   return head('Bid review', lede)
-  + `<p class="note">The steps, in order: ${STAGES.slice(0,4).map((s,i) => `${i+1}. ${esc(s)}`).join(' → ')}. Or “${esc(STAGES[4])}” if the team says no. When a project is finished here, click Archive to move it off this list.</p>`
+  + `<p class="note">The steps, in order: ${STAGES.slice(0,4).map((s,i) => `${i+1}. ${esc(s)}`).join(' → ')}. Or “${esc(STAGES[4])}” if the team says no. Before review, use “Add bid specs” to fill in the Innergy opportunity from the spec book. When a project is finished here, click Archive to move it off this list.</p>`
   + (rows.length ? `<div class="tablebox"><table><thead><tr><th>Project</th><th>GC (tier)</th><th>Bid due</th><th>Where it is now</th><th></th></tr></thead><tbody>
     ${rows.map(i => { const sc = screen(i), d = S.decisions.get(i.id); return `<tr><td><b>${esc(i.project)}</b>${i.sample?' <span class="chip sample">EXAMPLE</span>':''}<div class="meta">${esc(i.location||'')}</div></td>
       <td>${sc.gc ? esc(sc.gc.g.name)+' ('+esc(sc.tier)+')' : esc(i.gcText)}</td><td class="num">${i.due ? fmtDate(i.due) : 'Not stated'}</td>
       <td><select id="stage-${i.id}" data-act="stage" data-id="${i.id}" aria-label="Step for ${esc(i.project)}">${STAGES.map(s => `<option ${d.stage===s?'selected':''}>${s}</option>`).join('')}</select></td>
-      <td><div class="row" style="gap:4px;flex-wrap:nowrap"><button class="btn ghost" data-act="open" data-id="${i.id}" type="button">Open details</button><button class="btn" data-act="archive" data-id="${i.id}" type="button">Archive</button></div></td></tr>`; }).join('')}
+      <td><div class="row" style="gap:4px;flex-wrap:nowrap">${specStatus(i.id)}<button class="btn" data-act="specopen" data-id="${i.id}" type="button">${specDoc(i.id) ? 'Innergy entry' : 'Add bid specs'}</button><button class="btn ghost" data-act="open" data-id="${i.id}" type="button">Open details</button><button class="btn" data-act="archive" data-id="${i.id}" type="button">Archive</button></div></td></tr>`; }).join('')}
     </tbody></table></div>` : `<div class="empty">Nothing here yet. On “Today’s invites”, click “Send to bid review” on a project and it shows up here.</div>`);
 }
 function gcCounts(){ const c = {}; for (const i of S.invites.values()){ const m = matchGC(i); if (m) c[m.id] = (c[m.id]||0) + 1; } return c; }
@@ -401,7 +401,8 @@ function viewCriteria(){
     <details class="card"><summary style="cursor:pointer;font-weight:700">Words used for the project calculator</summary>
       <p class="meta">From Project Review Criteria v3.1. When Claude reads an invite, it picks from exactly these words, or says “Not stated”.</p>
       ${scoreTable('Segment', st.segments)}${scoreTable('Award basis', st.awardBasis)}${scoreTable('Bid type', st.bidTypes)}
-    </details>`;
+    </details>
+    ${innergyCard()}`;
 }
 function showCard(id, focus){ setTimeout(() => { const c = document.getElementById(id); if (!c) return; c.scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block:'start'}); if (focus) c.focus({preventScroll:true}); }, 60); }
 function viewTry(){
@@ -526,11 +527,9 @@ function drawer(id){
         <div class="kv">${kvs([['Size band', sb.band + ' · ' + sb.note + (inv.innergyValue && !inv.stated ? ` (from Innergy: ${money(inv.innergyValue)})` : '')],['Segment', inv.segment],['Award basis', inv.award],['Bid type', inv.bidType],['Time to review the drawings','Coming later'],['Millwork drawing sheets','Coming later']])}</div>
         <p class="meta">Later, this will list the millwork drawings by sheet number once it can open the plans on ${esc(inv.platform || 'the bid website')}. It will never price a job.</p>
         <span class="label">Message asking Estimating if they have time for this bid</span><p class="copybox" id="cap-text">${esc(capText)}</p><button class="btn" type="button" data-act="copy" data-src="cap-text" style="align-self:flex-start">Copy message</button></section>
-      <section><h3>Details for entering into Innergy <span class="chip">COMING LATER</span></h3>
-        <p class="meta">The color shows where each detail comes from.</p>
-        <div class="row"><span class="chip" style="background:var(--accent-soft)">From the invite</span><span class="chip">Company rule</span><span class="chip" style="background:var(--decline-soft)">Sales fills in at review</span></div>
-        <div class="kv">${kvs(card)}</div>
-        <pre class="copybox" id="card-text" hidden>${esc(cardText)}</pre><button class="btn" type="button" data-act="copy" data-src="card-text" style="align-self:flex-start">Copy these details</button></section>
+      <section><h3>Bid specs → Innergy ${specStatus(id)}</h3>
+        <p class="meta" style="margin:0">Add the spec book and bid documents. Claude fills in the Innergy opportunity (project, address, bid date, RFI date, owner, architect…) and lists the millwork spec requirements and possible RFIs. You check everything, then download the Innergy import file and the requirements file to attach.</p>
+        <button class="btn primary" type="button" data-act="specopen" data-id="${id}" style="align-self:flex-start">${specDoc(id) ? 'Open the Innergy entry' : 'Add bid specs'}</button></section>
       <section><h3>${inv.archived ? 'In the archive' : 'Done with this invite?'}</h3>${inv.archived ? `<p class="meta" style="margin:0">Archived ${inv.archivedAt ? fmtDate(inv.archivedAt.slice(0,10)) : ''}.</p><button class="btn" type="button" data-act="restore" data-id="${id}" style="align-self:flex-start">Restore to Today’s invites</button>` : `<button class="btn" type="button" data-act="archive" data-id="${id}" style="align-self:flex-start">Move to archive</button>`}</section>
       <section><h3>Something wrong here?</h3><button class="btn primary" type="button" data-act="fbabout" data-p="${esc(inv.project)}" style="align-self:flex-start">Tell us what’s wrong</button></section>
     </div></aside>`;
@@ -1057,10 +1056,465 @@ function viewArchive(){
   + `<p class="meta">Archived invites still count on the Accuracy screen and can still be found with “Ask a question”.</p>`;
 }
 
+/* ---------- Bid specs → Innergy: opportunity import file, spec requirements and RFIs ----------
+   The PDFs are read on this computer (pdf.js). Only the bid-info pages and the millwork sections
+   are sent to Claude, through CIM's service. Every value Claude returns must come with an exact
+   quote; the quote is checked against the PDF text here and anything not found is marked "check".
+   Innergy prices nothing from this: it gets the opportunity record and a file to attach. */
+const OPP_FIELDS = [
+  {k:'name', label:'Opportunity name', alias:['opportunity name','opportunity','name','project name','project']},
+  {k:'customer', label:'Customer (GC)', alias:['customer','customer name','client','company','account','general contractor','gc']},
+  {k:'contact', label:'GC contact', alias:['contact','contact name','customer contact']},
+  {k:'contactEmail', label:'GC contact email', alias:['email','contact email','e mail']},
+  {k:'street', label:'Street address', alias:['address','street','street address','address 1','address line 1','project address']},
+  {k:'city', label:'City', alias:['city','project city']},
+  {k:'state', label:'State', alias:['state','province','st']},
+  {k:'zip', label:'ZIP', alias:['zip','zip code','postal code','postcode']},
+  {k:'bidDate', label:'Bid date', date:true, alias:['bid date','bid due date','due date','bid due']},
+  {k:'bidTime', label:'Bid time', alias:['bid time','due time','bid due time']},
+  {k:'rfiDue', label:'RFI due date', date:true, alias:['rfi due date','rfi due','rfi date','questions due','question deadline']},
+  {k:'prebid', label:'Pre-bid meeting', alias:['pre bid meeting','prebid meeting','pre bid','prebid','pre bid conference']},
+  {k:'owner', label:'Owner', alias:['owner','project owner']},
+  {k:'architect', label:'Architect', alias:['architect','designer','design firm']},
+  {k:'projectNo', label:'Architect project number', alias:['architect project number','project number','project no','architect job number']},
+  {k:'award', label:'Basis of award', alias:['basis of award','award basis','award']},
+  {k:'bidType', label:'Bid type', alias:['bid type','type of bid']},
+  {k:'segment', label:'Segment', alias:['segment','market','market segment','industry']},
+  {k:'bidName', label:'Bid name', alias:['bid name','bid','bid number']},
+  {k:'revenue', label:'Projected revenue', alias:['projected revenue','revenue','estimated value','amount','value']},
+  {k:'firstDelivery', label:'First delivery', date:true, alias:['first delivery','first delivery date','delivery date']},
+  {k:'step', label:'Workflow step', alias:['workflow step','step','workflow','stage']},
+  {k:'status', label:'Review status', alias:['review status','status']},
+  {k:'winProb', label:'Win probability', alias:['win probability','probability','win %','win percent']},
+  {k:'margin', label:'Target margin', alias:['target margin','margin','target margin %']},
+  {k:'notes', label:'Notes', alias:['notes','note','description','comments','comment']},
+];
+const OPP_BY_KEY = Object.fromEntries(OPP_FIELDS.map(f => [f.k, f]));
+const SPEC_KEYS = ['name','street','city','state','zip','bidDate','bidTime','rfiDue','prebid','owner','architect','projectNo','award','customer'];
+const REQ_TOPICS = ['Scope and related work','Quality standard and grade','Materials','Finishes','Hardware','Fire rating','Submittals and samples','Mockups','Installation','Warranty','Sustainability','Delivery and storage','Other'];
+const SRC_LABEL = {invite:'From the invite', spec:'From the specs', rule:'Company rule', sales:'Sales fills in', edited:'Typed in'};
+const SPEC_CHUNK = 140000, FRONT_BUDGET = 120000;
+const DEFAULT_INNERGY = {headers:null, map:null, format:'csv', dateFormat:'MM/DD/YYYY', file:''};
+const innergySettings = () => Object.assign({}, DEFAULT_INNERGY, S.innergy || {});
+
+/* Reading the PDFs: one text string per page, plus the section each page belongs to. */
+async function pdfPages(file, onPage){
+  const lib = await loadPdfJs(); const doc = await lib.getDocument({data:await readFileAs(file, 'buf')}).promise; const pages = [];
+  for (let p = 1; p <= doc.numPages; p++){
+    const pg = await doc.getPage(p); const tc = await pg.getTextContent(); const lines = []; let line = '', lastY = null;
+    for (const it of tc.items){ const y = it.transform ? Math.round(it.transform[5]) : null; if (lastY !== null && y !== lastY && line.trim()){ lines.push(line); line = ''; } line += it.str + (it.hasEOL ? '\n' : ' '); lastY = y; }
+    if (line.trim()) lines.push(line);
+    pages.push(lines.join('\n').replace(/[ \t]+/g,' ').replace(/\n\s*\n+/g,'\n').trim());
+    pg.cleanup(); if (onPage) onPage(p, doc.numPages);
+  }
+  doc.destroy(); return pages;
+}
+const SEC_HEAD = /^\s*SECTION\s+(\d{2})\s?(\d{2})\s?(\d{2})(?:\.(\d{1,2}))?\b/i; // a heading line, not "refer to Section …" in the text
+const SEC_FOOT = /(?:^|\s)(\d{2})\s?(\d{2})\s?(\d{2})(?:\.\d{1,2})?\s*[-–—]\s*\d{1,3}\s*$/;
+const secId = m => `${m[1]} ${m[2]} ${m[3]}`;
+function sectionPages(pages){
+  // Returns [{sec, title}] per page. A table of contents page (many section numbers) belongs to no section.
+  let cur = null, curTitle = '', ended = false; const out = [];
+  for (const text of pages){
+    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+    const many = (text.match(/\b\d{2}\s?\d{2}\s?\d{2}\b/g) || []).length;
+    if (many >= 12 && /contents|index|table of/i.test(text.slice(0, 600))){ out.push({sec:null, title:'', toc:true}); continue; }
+    let sec = null, title = '';
+    for (let i = 0; i < Math.min(8, lines.length); i++){ const m = lines[i].match(SEC_HEAD); if (m){ sec = secId(m); const rest = lines[i].slice(lines[i].search(SEC_HEAD) + m[0].length).replace(/^[\s:–—-]+/,''); title = rest || (lines[i+1] && !SEC_FOOT.test(lines[i+1]) ? lines[i+1] : ''); break; } }
+    if (!sec){ for (const l of [...lines.slice(-4), ...lines.slice(0, 3)]){ const m = l.match(SEC_FOOT); if (m){ sec = secId(m); break; } } }
+    if (sec && sec !== cur){ cur = sec; curTitle = title || ''; ended = false; }
+    else if (!sec && !ended) sec = cur;
+    if (sec && title && !curTitle) curTitle = title;
+    out.push({sec, title: sec ? curTitle : ''});
+    if (/END OF SECTION/i.test(text.slice(-300))) ended = true;
+  }
+  return out;
+}
+const isMillwork = sec => /^06 [2468]\d/.test(sec) || /^12 3\d/.test(sec);
+const FRONT_ORDER = [/^00 0/, /^00 1/, /^00 2/, /^00 4/, /^00 3/, /^01 1/, /^00 [5-9]/, /^01 2/, /^01 3[13]/];
+function buildSections(files){
+  // files: [{name, pages, secs}] → list of sections with pages, and the front-end pages.
+  const map = new Map(); const front = [];
+  files.forEach((f, fi) => {
+    const addenda = /addend/i.test(f.name);
+    f.pages.forEach((txt, pi) => {
+      const s = f.secs[pi];
+      if (addenda){ front.push({fi, pi, pri:-1}); return; }
+      if (!s.sec){ if (!s.toc) front.push({fi, pi, pri: pi < 40 ? 0 : 9}); return; }
+      const key = s.sec;
+      if (!map.has(key)) map.set(key, {sec:key, title:s.title, parts:[]});
+      const g = map.get(key); if (!g.title && s.title) g.title = s.title; g.parts.push({fi, pi});
+      if (/^0[01] /.test(key)){ const k = FRONT_ORDER.findIndex(re => re.test(key)); if (k >= 0) front.push({fi, pi, pri:k + 1}); }
+    });
+  });
+  const sections = [...map.values()].map(g => ({...g, chars: g.parts.reduce((a, p) => a + files[p.fi].pages[p.pi].length, 0), mill: isMillwork(g.sec)})).sort((a,b) => a.sec.localeCompare(b.sec));
+  front.sort((a,b) => a.pri - b.pri || a.fi - b.fi || a.pi - b.pi);
+  return {sections, front};
+}
+const pageMark = (fi, pi) => `[[F${fi+1} p.${pi+1}]]`;
+function pagesText(files, refs, budget){
+  let out = '', used = 0;
+  for (const r of refs){ const t = files[r.fi].pages[r.pi]; if (!t) continue; const piece = `\n${pageMark(r.fi, r.pi)}\n${t}\n`; if (used + piece.length > budget) break; out += piece; used += piece.length; }
+  return out;
+}
+
+/* Checking a quote against the PDF text. */
+const qn = s => String(s||'').toLowerCase().replace(/[‘’]/g,"'").replace(/[“”]/g,'"').replace(/[^a-z0-9]+/g,' ').trim();
+function findQuote(files, quote, fi, pi){
+  const parts = String(quote||'').split(/\.{3}|…/).map(qn).filter(p => p.split(' ').length >= 3);
+  if (!parts.length) return null;
+  const hit = (f, p) => { const t = qn(files[f] && files[f].pages[p]); return t && parts.every(x => t.includes(x)); };
+  if (fi != null && pi != null && hit(fi, pi)) return {fi, pi};
+  if (fi != null && files[fi]) for (let p = 0; p < files[fi].pages.length; p++) if (hit(fi, p)) return {fi, pi:p};
+  for (let f = 0; f < files.length; f++) for (let p = 0; p < files[f].pages.length; p++) if (hit(f, p)) return {fi:f, pi:p};
+  return null;
+}
+function checkItem(files, x){
+  const fi = Number.isFinite(+x.file) && +x.file > 0 ? +x.file - 1 : null, pi = Number.isFinite(+x.page) && +x.page > 0 ? +x.page - 1 : null;
+  const at = findQuote(files, x.quote, fi, pi);
+  return {...x, quote:String(x.quote||'').slice(0, 300), ok:!!at, file: at ? files[at.fi].name : (fi != null && files[fi] ? files[fi].name : ''), page: at ? at.pi + 1 : (pi != null ? pi + 1 : null)};
+}
+
+/* Claude prompts */
+function oppPrompt(inv, text){
+  return `You read the front end of a construction bid package (invitation to bid, instructions to bidders, bid form, summary of work, addenda) for Concepts in Millwork, an architectural millwork subcontractor in Colorado Springs, Colorado. Today is ${today()}.
+Extract only what the text states. Never guess. Each page starts with a marker like [[F1 p.12]] (file 1, page 12).
+For every field give the value, the file number and page number where it is stated, and an exact quote of 5 to 30 words copied character for character from that page. Use value "" when the documents don't say.
+Fields:
+- name: the project name as the documents title it
+- street, city, state (2-letter), zip: the project site address
+- owner, architect, projectNo (the architect's or owner's project number)
+- customer: the general contractor or construction manager, only if the documents name one
+- bidDate (YYYY-MM-DD) and bidTime: when bids are due. If an addendum changes it, use the latest and quote the addendum
+- rfiDue (YYYY-MM-DD): the last day for questions or requests for information
+- prebid: pre-bid meeting date, time, place, and whether it is mandatory
+- award: exactly one of "Negotiated", "Hard Bid", "Don't Know" ("Hard Bid" for competitive sealed or lump-sum bids)
+Also list up to 8 notes a millwork subcontractor should know before bidding: bid security or bond, prevailing wage, substitution request deadline, alternates that touch millwork, liquidated damages, diversity goals, unusual insurance.
+The invite email already says: project "${inv.project||''}", GC "${inv.gcText||''}", bid due "${inv.due||''} ${inv.dueTime||''}", location "${inv.location||''}".
+Reply with only this JSON:
+{"fields":{"name":{"value":"","file":1,"page":0,"quote":""}, ...one entry per field above...},"notes":[{"text":"","file":1,"page":0,"quote":""}]}
+
+DOCUMENTS:
+${text}`;
+}
+function reqPrompt(inv, secList, text){
+  return `You review architectural millwork specification sections for Concepts in Millwork, a millwork subcontractor in Colorado Springs that is deciding how to bid project "${inv.project||''}". Sections in this batch: ${secList}.
+Each page starts with a marker like [[F1 p.12]] (file 1, page 12).
+1. List the requirements that change what CIM must build, buy, submit, install or price. Topics (use exactly one): ${REQ_TOPICS.join('; ')}.
+   For each: section number, topic, the requirement in plain English (at most 25 words), file and page, and an exact quote of 5 to 30 words copied character for character.
+   Include quality standard and grade (AWI/AWMAC/WI, premium or custom), core and panel products, veneer species and cut, laminate and solid surface products, finish system, hardware, fire ratings, submittal, sample and mockup requirements, warranty, sustainability (FSC, NAUF), field measuring, and work by others.
+2. List RFI candidates: questions a millwork estimator should send to the architect before bidding: conflicts between sections or with drawings mentioned in the text, missing information, unclear scope or responsibility, proprietary products with no "or equal", discontinued or hard-to-get products. For each: the question as it would be written to the architect, why it matters (at most 20 words), section, file, page, and an exact quote (5 to 30 words).
+At most 60 requirements and 15 RFIs; put the ones that affect price or scope first. Don't invent anything that isn't in the text.
+Reply with only this JSON:
+{"requirements":[{"section":"","topic":"","text":"","file":1,"page":0,"quote":""}],"rfis":[{"question":"","why":"","section":"","file":1,"page":0,"quote":""}]}
+
+SPECIFICATION TEXT:
+${text}`;
+}
+
+/* Opportunity values: invite, company rules, specs, and what Sales types in. */
+function splitAddress(loc){
+  const m = String(loc||'').match(/^(.*?),\s*([^,]+),\s*([A-Z]{2})\s*(\d{5})?/);
+  return m ? {street:m[1].trim(), city:m[2].trim(), state:m[3], zip:m[4]||''} : {street:String(loc||''), city:'', state:'', zip:''};
+}
+function baseOpp(inv){
+  const sc = screen(inv); const a = splitAddress(inv.location); const isRebid = (inv.extraFlags||[]).some(x => /rebid/i.test(x));
+  const v = (val, from) => ({v: val == null ? '' : String(val), from});
+  return {
+    name:v(inv.project, 'invite'), customer:v(sc.gc ? sc.gc.g.name : inv.gcText, 'invite'), contact:v(inv.contactName, 'invite'), contactEmail:v(inv.contactEmail, 'invite'),
+    street:v(a.street, 'invite'), city:v(a.city, 'invite'), state:v(a.state, 'invite'), zip:v(a.zip, 'invite'),
+    bidDate:v(inv.due, 'invite'), bidTime:v(inv.dueTime, 'invite'), rfiDue:v(inv.rfi, 'invite'), prebid:v('', 'spec'),
+    owner:v(inv.owner, 'invite'), architect:v('', 'spec'), projectNo:v('', 'spec'),
+    award:v(inv.award, 'invite'), bidType:v(inv.bidType, inv.bidType ? 'invite' : 'sales'), segment:v(inv.segment, inv.segment ? 'invite' : 'sales'),
+    bidName:v(isRebid ? '' : '1', isRebid ? 'sales' : 'rule'), revenue:v('0', 'rule'), firstDelivery:v(today(), 'rule'),
+    step:v('Review Opportunity', 'rule'), status:v(isRebid ? 'Rebid' : 'Ready for Project Review', 'rule'),
+    winProb:v('', 'sales'), margin:v('', 'sales'), notes:v('', 'spec'),
+  };
+}
+function oppFromSpec(inv, cur, got, files){
+  const opp = {...cur}; const conflicts = [];
+  const sameish = (a, b) => qn(a) === qn(b) || (qn(a) && qn(b) && (qn(a).includes(qn(b)) || qn(b).includes(qn(a))));
+  for (const k of SPEC_KEYS){
+    const g = got && got.fields && got.fields[k]; if (!g || !String(g.value||'').trim()) continue;
+    const c = checkItem(files, g); const val = String(g.value).trim();
+    const specVal = {v:val, from:'spec', quote:c.quote, file:c.file, page:c.page, ok:c.ok};
+    const old = opp[k];
+    if (old && old.from === 'edited') { if (!sameish(old.v, val)) opp[k] = {...old, alt:specVal}; continue; }
+    if (old && old.v && old.from === 'invite'){ opp[k] = sameish(old.v, val) ? {...old, quote:c.quote, file:c.file, page:c.page, ok:c.ok, both:true} : {...old, alt:specVal}; if (!sameish(old.v, val)) conflicts.push(k); continue; }
+    opp[k] = specVal;
+  }
+  const notes = ((got && got.notes) || []).slice(0, 8).map(n => checkItem(files, n)).filter(n => n.text);
+  if (notes.length && (!opp.notes || opp.notes.from !== 'edited')) opp.notes = {v: notes.map(n => n.text).join('; '), from:'spec', ok:notes.every(n => n.ok), list:notes};
+  return {opp, conflicts};
+}
+
+/* Saved results: specs/<inviteId> holds everything except the requirements, which go in
+   specs/<inviteId>--r0, --r1 ... so no single SharePoint row passes its size limit. */
+function specDoc(id){ return S.specs.get(id) || null; }
+function specReqs(id){ const out = []; for (let k = 0; S.specs.has(id + '--r' + k); k++) out.push(...(S.specs.get(id + '--r' + k).items || [])); return out; }
+async function saveSpecResult(id, base, reqs){
+  const chunks = []; let cur = [];
+  for (const r of reqs){ cur.push(r); if (JSON.stringify(cur).length > 45000){ cur.pop(); chunks.push(cur); cur = [r]; } }
+  if (cur.length) chunks.push(cur);
+  const old = []; for (let k = 0; S.specs.has(id + '--r' + k); k++) old.push(k);
+  S.specs.set(id, base); chunks.forEach((c, k) => S.specs.set(id + '--r' + k, {items:c})); for (const k of old) if (k >= chunks.length) S.specs.delete(id + '--r' + k);
+  render();
+  await write(async () => {
+    await S.db.doc('specs/' + id).set(base);
+    for (let k = 0; k < chunks.length; k++) await S.db.doc('specs/' + id + '--r' + k).set({items:chunks[k]});
+    for (const k of old) if (k >= chunks.length) await S.db.doc('specs/' + id + '--r' + k).delete();
+  }, 'Saved.');
+}
+let specTimer = null;
+function setOpp(id, k, v){
+  let d = specDoc(id); if (!d){ d = {opp:baseOpp({id, ...S.invites.get(id)}), files:[], sections:[], rfis:[], at:null}; S.specs.set(id, d); }
+  d.opp = {...d.opp, [k]:{v:String(v), from:'edited'}}; saveSpecBase(id);
+}
+function saveSpecBase(id){ clearTimeout(specTimer); specTimer = setTimeout(() => { const d = specDoc(id); if (d) write(() => S.db.doc('specs/' + id).set(d)); }, 700); }
+
+/* Step 1: add the PDFs */
+async function addSpecFiles(id, list){
+  list = [...list].filter(f => /\.pdf$/i.test(f.name) || f.type === 'application/pdf');
+  if (!list.length){ toast('Choose PDF files.'); return; }
+  const mem = S.specMem[id] || (S.specMem[id] = {files:[]});
+  S.specRun = {id, busy:true, msg:'Opening the PDF reader…', errs:[]}; render();
+  for (const f of list){
+    try {
+      const pages = await pdfPages(f, (p, n) => { if (p === 1 || p % 10 === 0 || p === n){ S.specRun.msg = `Reading ${f.name}: page ${p} of ${n}`; render(); } });
+      const chars = pages.reduce((a, t) => a + t.length, 0);
+      const blank = pages.filter(t => t.length < 40).length;
+      mem.files = mem.files.filter(x => x.name !== f.name);
+      mem.files.push({name:f.name, pages, secs:sectionPages(pages), scanned: blank > pages.length * 0.6, chars});
+    } catch (e) { S.specRun.errs.push(`${f.name}: ${(e && e.message) || 'couldn’t be read'}`); }
+  }
+  mem.built = buildSections(mem.files);
+  mem.pick = new Set(mem.built.sections.filter(s => s.mill).map(s => s.sec));
+  S.specRun = {id, busy:false, msg:'', errs:S.specRun.errs}; render(); showCard('spec-step2');
+}
+
+/* Step 2: read with Claude */
+async function readSpecs(id){
+  const inv = {id, ...S.invites.get(id)}; const mem = S.specMem[id]; if (!mem || !mem.files.length) return;
+  if (!S.sample){ toast('Reading specs needs Claude, which is on only in live mode.'); return; }
+  const files = mem.files, built = mem.built, picked = built.sections.filter(s => mem.pick.has(s.sec));
+  const ctl = new AbortController(); S.specRun = {id, busy:true, msg:'', errs:[], ctl};
+  const step = (m) => { S.specRun.msg = m; render(); };
+  const errMsg = e => ({cancelled:'Stopped.', rate_limited:'Too many requests right now; wait a minute and try again.', prompt_too_large:'Too much text in one request.', invalid_json:'Claude’s answer couldn’t be read.', not_granted:'Your account can’t use the Claude service.', network:'Couldn’t reach the Claude service.'})[e && e.code] || (e && e.message) || 'Something went wrong.';
+  const prev = specDoc(id) || {};
+  let opp = prev.opp || baseOpp(inv), conflicts = [], reqs = [], rfis = [];
+  try {
+    const frontText = pagesText(files, built.front, FRONT_BUDGET);
+    if (frontText.trim()){
+      step('Reading the bid information (invitation, instructions, bid form)…');
+      try { const got = await S.sample.json(oppPrompt(inv, frontText), {effort:'low', signal:ctl.signal}); ({opp, conflicts} = oppFromSpec(inv, opp, got, files)); }
+      catch (e) { if (e && e.code === 'cancelled') throw e; S.specRun.errs.push('Bid information: ' + errMsg(e)); }
+    }
+    // Batches of whole sections, each under SPEC_CHUNK characters; a section bigger than that is split by pages.
+    const batches = []; let cur = {secs:[], refs:[], size:0};
+    for (const s of picked){
+      if (s.chars > SPEC_CHUNK){ let part = {secs:[s.sec], refs:[], size:0}; for (const r of s.parts){ const n = files[r.fi].pages[r.pi].length + 20; if (part.size + n > SPEC_CHUNK && part.refs.length){ batches.push(part); part = {secs:[s.sec + ' (continued)'], refs:[], size:0}; } part.refs.push(r); part.size += n; } batches.push(part); continue; }
+      if (cur.size + s.chars > SPEC_CHUNK && cur.refs.length){ batches.push(cur); cur = {secs:[], refs:[], size:0}; }
+      cur.secs.push(s.sec + (s.title ? ' ' + s.title : '')); cur.refs.push(...s.parts); cur.size += s.chars + s.parts.length * 20;
+    }
+    if (cur.refs.length) batches.push(cur);
+    const addenda = built.front.filter(r => /addend/i.test(files[r.fi].name));
+    for (let b = 0; b < batches.length; b++){
+      step(`Reading the millwork sections (${b+1} of ${batches.length}): ${batches[b].secs.slice(0,4).join(', ')}${batches[b].secs.length > 4 ? '…' : ''}`);
+      const text = pagesText(files, batches[b].refs, SPEC_CHUNK) + (addenda.length ? pagesText(files, addenda, 40000) : '');
+      try {
+        const got = await S.sample.json(reqPrompt(inv, batches[b].secs.join('; '), text), {effort:'medium', signal:ctl.signal});
+        reqs.push(...((got && got.requirements) || []).filter(r => r && r.text).map(r => checkItem(files, {section:String(r.section||''), topic: REQ_TOPICS.includes(r.topic) ? r.topic : 'Other', text:String(r.text), file:r.file, page:r.page, quote:r.quote})));
+        rfis.push(...((got && got.rfis) || []).filter(r => r && r.question).map(r => ({...checkItem(files, {section:String(r.section||''), question:String(r.question), why:String(r.why||''), file:r.file, page:r.page, quote:r.quote}), include:true})));
+      } catch (e) { if (e && e.code === 'cancelled') throw e; S.specRun.errs.push(`Sections ${batches[b].secs.slice(0,3).join(', ')}: ${errMsg(e)}`); }
+    }
+    if (!picked.length) S.specRun.errs.push('No millwork sections were chosen, so there are no spec requirements. Tick the sections to read in step 2.');
+  } catch (e) {
+    S.specRun = {id, busy:false, msg:'', errs:[errMsg(e)]}; render(); return;
+  }
+  const seen = new Set(); reqs = reqs.filter(r => { const k = qn(r.section + r.text); if (seen.has(k)) return false; seen.add(k); return true; });
+  const base = {files:files.map(f => ({name:f.name, pages:f.pages.length, scanned:f.scanned})), sections:picked.map(s => ({sec:s.sec, title:s.title, pages:s.parts.length})),
+    opp, conflicts, rfis: rfis.slice(0, 40), at:new Date().toISOString(), by:by(), reqCount:reqs.length, unchecked:reqs.filter(r => !r.ok).length + rfis.filter(r => !r.ok).length};
+  S.specRun = {id, busy:false, msg:'', errs:S.specRun.errs};
+  await saveSpecResult(id, base, reqs);
+  showCard('spec-results', true);
+}
+
+/* Import file in Innergy's own layout */
+function autoMap(headers){
+  const map = {}; const used = new Set();
+  const score = (h, f) => { const H = qn(h); let best = 0; for (const a of [f.label, ...f.alias]){ const A = qn(a); if (!A) continue; if (H === A) best = Math.max(best, 10); else if (H.split(' ').length > 1 && (H.includes(A) || A.includes(H)) && Math.min(A.length, H.length) >= 4) best = Math.max(best, 5); } return best; };
+  for (const h of headers){ let bk = '', bs = 0; for (const f of OPP_FIELDS){ if (used.has(f.k)) continue; const s = score(h, f); if (s > bs){ bs = s; bk = f.k; } } if (bs >= 5){ map[h] = bk; used.add(bk); } else map[h] = ''; }
+  return map;
+}
+function fmtOut(v, f, st){
+  if (!f || !f.date || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+  return st.dateFormat === 'YYYY-MM-DD' ? v : `${v.slice(5,7)}/${v.slice(8,10)}/${v.slice(0,4)}`;
+}
+function importRow(opp){
+  const st = innergySettings();
+  const headers = st.headers && st.headers.length ? st.headers : OPP_FIELDS.map(f => f.label);
+  const map = st.headers && st.headers.length ? (st.map || autoMap(st.headers)) : Object.fromEntries(OPP_FIELDS.map(f => [f.label, f.k]));
+  const row = headers.map(h => { const m = map[h] || ''; if (m.startsWith('=')) return m.slice(1); const f = OPP_BY_KEY[m]; return f ? fmtOut((opp[m] && opp[m].v) || '', f, st) : ''; });
+  return {headers, row, st};
+}
+const fileSafe = s => String(s||'project').replace(/[\\/:*?"<>|]+/g,' ').replace(/\s+/g,' ').trim().slice(0, 60);
+function saveBlob(name, blob){ const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000); }
+function csvCell(v){ v = String(v ?? ''); return /[",\n\r]/.test(v) ? '"' + v.replace(/"/g,'""') + '"' : v; }
+function downloadImport(id){
+  const inv = S.invites.get(id), d = specDoc(id); const opp = (d && d.opp) || baseOpp({id, ...inv});
+  const missing = ['name','customer'].filter(k => !(opp[k] && opp[k].v));
+  if (missing.length){ toast('Fill in ' + missing.map(k => OPP_BY_KEY[k].label).join(' and ') + ' first.'); return; }
+  const {headers, row, st} = importRow(opp); const base = `Innergy opportunity - ${fileSafe(inv.project)}`;
+  if (st.format === 'xlsx'){
+    if (!window.XLSX){ toast('The spreadsheet library didn’t load. Switch the import file to CSV on the Rules screen.'); return; }
+    const ws = XLSX.utils.aoa_to_sheet([headers, row]); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, (st.sheet || 'Import').slice(0, 31));
+    saveBlob(base + '.xlsx', new Blob([XLSX.write(wb, {bookType:'xlsx', type:'array'})], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+  } else {
+    saveBlob(base + '.csv', new Blob(['﻿' + [headers, row].map(r => r.map(csvCell).join(',')).join('\r\n') + '\r\n'], {type:'text/csv'}));
+  }
+  if (d){ d.importedAt = new Date().toISOString(); d.importedBy = by(); saveSpecBase(id); render(); }
+}
+function downloadRequirements(id){
+  if (!window.XLSX){ toast('The spreadsheet library didn’t load. Use “Print or save as PDF” instead.'); return; }
+  const inv = S.invites.get(id), d = specDoc(id); const reqs = specReqs(id); const opp = d.opp || {};
+  const val = k => (opp[k] && opp[k].v) || '';
+  const where = x => [x.file, x.page ? 'p. ' + x.page : ''].filter(Boolean).join(', ');
+  const summary = [
+    ['Spec requirements and RFIs'], [], ['Project', inv.project], ['GC', val('customer')], ['Bid due', [val('bidDate'), val('bidTime')].filter(Boolean).join(' ')], ['RFI due', val('rfiDue')], ['Owner', val('owner')], ['Architect', val('architect')],
+    ['Documents read', d.files.map(f => `${f.name} (${f.pages} pages)`).join('; ')], ['Sections read', d.sections.map(s => s.sec + (s.title ? ' ' + s.title : '')).join('; ')],
+    ['Prepared', `${fmtDate(d.at.slice(0,10))} ${d.at.slice(0,4)} with Claude; every quote was checked against the PDF text. “Check” means the quote wasn’t found word for word, so look at the spec yourself.`],
+    ['Notes from the bid documents', val('notes')],
+  ];
+  const wb = XLSX.utils.book_new();
+  const s1 = XLSX.utils.aoa_to_sheet(summary); s1['!cols'] = [{wch:26},{wch:110}]; XLSX.utils.book_append_sheet(wb, s1, 'Summary');
+  const s2 = XLSX.utils.aoa_to_sheet([['Section','Topic','Requirement','Where','Quote from the spec','Quote found in the PDF'], ...reqs.map(r => [r.section, r.topic, r.text, where(r), r.quote, r.ok ? 'Yes' : 'Check'])]);
+  s2['!cols'] = [{wch:12},{wch:22},{wch:60},{wch:30},{wch:70},{wch:12}]; XLSX.utils.book_append_sheet(wb, s2, 'Requirements');
+  const s3 = XLSX.utils.aoa_to_sheet([['Send?','Question for the architect','Why it matters','Section','Where','Quote from the spec','Quote found in the PDF'], ...(d.rfis||[]).map(r => [r.include ? 'Yes' : 'No', r.question, r.why, r.section, where(r), r.quote, r.ok ? 'Yes' : 'Check'])]);
+  s3['!cols'] = [{wch:7},{wch:70},{wch:36},{wch:12},{wch:30},{wch:60},{wch:12}]; XLSX.utils.book_append_sheet(wb, s3, 'RFIs');
+  saveBlob(`Spec requirements and RFIs - ${fileSafe(inv.project)}.xlsx`, new Blob([XLSX.write(wb, {bookType:'xlsx', type:'array'})], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+}
+function printRequirements(id){
+  const inv = S.invites.get(id), d = specDoc(id); const reqs = specReqs(id); const opp = d.opp || {}; const val = k => (opp[k] && opp[k].v) || '';
+  const where = x => esc([x.file, x.page ? 'p. ' + x.page : ''].filter(Boolean).join(', '));
+  const bySec = new Map(); for (const r of reqs){ const k = r.section || 'Other'; if (!bySec.has(k)) bySec.set(k, []); bySec.get(k).push(r); }
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Spec requirements and RFIs - ${esc(inv.project)}</title><style>
+    body{font:12px/1.4 'Segoe UI',Arial,sans-serif;color:#111;margin:24px} h1{font-size:18px;margin:0 0 4px} h2{font-size:14px;margin:18px 0 6px;border-bottom:1px solid #999} table{border-collapse:collapse;width:100%} td,th{border:1px solid #bbb;padding:4px 6px;vertical-align:top;text-align:left} th{background:#eee} .q{color:#444;font-style:italic} .chk{color:#9c3a12;font-weight:700} .meta{color:#555}
+    @media print{h2{break-after:avoid} tr{break-inside:avoid}}</style></head><body>
+    <h1>Spec requirements and RFIs: ${esc(inv.project)}</h1>
+    <p class="meta">GC: ${esc(val('customer'))} · Bid due: ${esc([val('bidDate'), val('bidTime')].filter(Boolean).join(' '))} · RFI due: ${esc(val('rfiDue') || 'not stated')} · Architect: ${esc(val('architect') || 'not stated')}<br>
+    Read ${esc(d.files.map(f => f.name).join(', '))} on ${esc(fmtDate(d.at.slice(0,10)))}. Every quote was checked against the PDF; <span class="chk">Check</span> means it wasn’t found word for word.</p>
+    ${val('notes') ? `<h2>From the bid documents</h2><p>${esc(val('notes'))}</p>` : ''}
+    <h2>RFIs to send</h2>${(d.rfis||[]).filter(r => r.include).length ? `<table><tr><th>#</th><th>Question</th><th>Why it matters</th><th>Where</th></tr>${(d.rfis||[]).filter(r => r.include).map((r, i) => `<tr><td>${i+1}</td><td>${esc(r.question)}<div class="q">“${esc(r.quote)}”</div></td><td>${esc(r.why)}</td><td>${esc(r.section)}<br>${where(r)}${r.ok ? '' : ' <span class="chk">Check</span>'}</td></tr>`).join('')}</table>` : '<p>None selected.</p>'}
+    ${[...bySec.entries()].map(([sec, xs]) => `<h2>Section ${esc(sec)}</h2><table><tr><th style="width:18%">Topic</th><th>Requirement</th><th style="width:20%">Where</th></tr>${xs.map(r => `<tr><td>${esc(r.topic)}</td><td>${esc(r.text)}<div class="q">“${esc(r.quote)}”</div></td><td>${where(r)}${r.ok ? '' : ' <span class="chk">Check</span>'}</td></tr>`).join('')}</table>`).join('')}
+    <scr`+`ipt>window.onload=()=>setTimeout(()=>window.print(),300)</scr`+`ipt></body></html>`;
+  const w = window.open('', '_blank'); if (!w){ toast('Your browser blocked the print window. Allow pop-ups for this page.'); return; }
+  w.document.open(); w.document.write(html); w.document.close();
+}
+function rfiText(id){ const d = specDoc(id); return (d.rfis||[]).filter(r => r.include).map((r, i) => `${i+1}. ${r.question}\n   Reference: Section ${r.section}${r.page ? ', page ' + r.page : ''}`).join('\n\n'); }
+
+/* The screen */
+function srcChip(o){
+  if (!o) return '';
+  const where = o.page ? ` · ${o.file ? esc(o.file) + ', ' : ''}p. ${o.page}` : '';
+  return `<span class="meta">${esc(SRC_LABEL[o.from] || '')}${o.from === 'spec' || o.both ? where : ''}</span>${(o.from === 'spec' || o.both) && o.ok === false ? ' <span class="chip warn">Check</span>' : ''}`;
+}
+function viewSpecs(id){
+  const inv0 = S.invites.get(id); if (!inv0) { S.specId = null; return viewDigest(); }
+  const inv = {id, ...inv0}; const d = specDoc(id); const mem = S.specMem[id]; const run = S.specRun && S.specRun.id === id ? S.specRun : null;
+  const opp = (d && d.opp) || baseOpp(inv); const reqs = d ? specReqs(id) : []; const st = innergySettings();
+  const back = `<button class="btn" type="button" data-act="specback">← Back</button>`;
+  const filesCard = `<section class="card" id="spec-step1"><h3>1. Add the bid documents</h3>
+      <p class="meta" style="margin:0">Choose the project manual or spec book (PDF), plus the invitation to bid and any addenda if they’re separate files. Big spec books are fine. The PDFs are read on this computer; only the bid-information pages and the millwork sections are sent to Claude, through CIM’s service.</p>
+      <div class="field"><label for="spec-file">Choose PDF files</label><input type="file" id="spec-file" multiple accept=".pdf,application/pdf" data-act="specfiles" data-id="${id}" ${run && run.busy ? 'disabled' : ''}></div>
+      ${mem && mem.files.length ? `<ul style="margin:0;padding-left:20px">${mem.files.map(f => `<li>${esc(f.name)}: ${f.pages.length} pages${f.scanned ? ' <span class="chip warn">Mostly scanned images: little text to read. Ask for a text PDF.</span>' : ''}</li>`).join('')}</ul>` : d && d.at ? `<p class="meta" style="margin:0">Last read: ${esc(d.files.map(f => f.name).join(', '))} on ${fmtDate(d.at.slice(0,10))}. To read again, choose the PDFs again.</p>` : ''}
+    </section>`;
+  let pickCard = '';
+  if (mem && mem.built){
+    const mill = mem.built.sections.filter(s => s.mill), other = mem.built.sections.filter(s => !s.mill);
+    const row = s => `<label class="row" style="gap:8px"><input type="checkbox" data-act="specpick" data-id="${id}" data-sec="${esc(s.sec)}" ${mem.pick.has(s.sec)?'checked':''}> <b>${esc(s.sec)}</b> ${esc(s.title || '')} <span class="meta">(${s.parts.length} page${s.parts.length===1?'':'s'})</span></label>`;
+    pickCard = `<section class="card" id="spec-step2"><h3>2. Check what we’ll read</h3>
+      <p class="meta" style="margin:0">Bid information: ${mem.built.front.length} pages (cover, invitation, instructions to bidders, bid form, summary, addenda). Millwork sections are ticked for the spec requirements; tick any others that matter for this job.</p>
+      ${mill.length ? mill.map(row).join('') : '<p class="checktext" style="margin:0">No millwork sections (06 20, 06 40, 06 60, 12 30…) were found. Tick the sections to read below, or check that the spec book was the file you chose.</p>'}
+      ${other.length ? `<details><summary style="cursor:pointer;font-weight:600">Other sections found (${other.length})</summary><div class="group" style="gap:4px;margin-top:6px;max-height:260px;overflow:auto">${other.map(row).join('')}</div></details>` : ''}
+      <div class="row"><button class="btn primary" type="button" data-act="specread" data-id="${id}" style="font-size:16px;min-height:44px" ${run && run.busy || !S.sample ? 'disabled' : ''}>${d ? 'Read the specs again' : 'Read the specs'}</button>
+      ${S.sample ? '<span class="meta">Takes about a minute per batch of sections. Keep this page open.</span>' : '<span class="meta">Reading needs Claude, which is on only in live mode.</span>'}</div>
+    </section>`;
+  }
+  const runCard = run && (run.busy || run.errs.length) ? `<section class="card" style="border:2px solid ${run.busy ? 'var(--accent)' : 'var(--decline)'}">${run.busy ? `<p style="font-size:16px;font-weight:600;color:var(--accent);margin:0">${esc(run.msg || 'Working…')}</p>${run.ctl ? '<div class="row"><button class="btn" type="button" data-act="specstop">Stop</button></div>' : ''}` : ''}${run.errs.length ? `<p style="margin:0"><b>Some parts didn’t finish:</b></p><ul style="margin:0;padding-left:20px">${run.errs.map(e => `<li>${esc(e)}</li>`).join('')}</ul>` : ''}</section>` : '';
+  const fieldRow = f => { const o = opp[f.k] || {v:'', from:'sales'}; const alt = o.alt;
+    return `<tr><td><b>${esc(f.label)}</b></td><td><input type="${f.date ? 'date' : 'text'}" id="opp-${f.k}" value="${esc(o.v)}" data-act="oppfield" data-id="${id}" data-k="${f.k}" aria-label="${esc(f.label)}" style="width:100%;min-width:160px">
+      ${o.quote && (o.from === 'spec' || o.both) ? `<div class="meta" style="font-style:italic">“${esc(o.quote)}”</div>` : ''}
+      ${alt ? `<div class="checktext" style="margin-top:4px">The specs say <b>${esc(f.date && /^\d{4}-\d{2}-\d{2}$/.test(alt.v) ? fmtDate(alt.v) + ', ' + alt.v.slice(0,4) : alt.v)}</b> (${esc(alt.file||'')}${alt.page ? ', p. ' + alt.page : ''})${alt.ok === false ? ' — quote not found, check' : ''}. <button class="btn ghost" style="padding:0;min-height:0" type="button" data-act="oppalt" data-id="${id}" data-k="${f.k}">Use this</button></div>` : ''}</td><td>${srcChip(o)}</td></tr>`; };
+  const mapped = st.headers && st.headers.length;
+  const oppCard = `<section class="card" id="spec-results"><h3>3. Innergy opportunity</h3>
+      <p class="meta" style="margin:0">Check each detail and fix anything that’s wrong. Changes save on their own. ${d ? '' : 'These come from the invite until you read the specs.'}</p>
+      ${d && d.conflicts && d.conflicts.length ? `<p class="note" style="margin:0">The specs and the invite disagree on ${d.conflicts.map(k => OPP_BY_KEY[k].label.toLowerCase()).join(', ')}. The invite’s value is kept; check the specs’ value under each one.</p>` : ''}
+      <div class="tablebox"><table><thead><tr><th style="width:24%">Innergy detail</th><th>Value</th><th style="width:22%">Where it came from</th></tr></thead><tbody>${OPP_FIELDS.map(fieldRow).join('')}</tbody></table></div>
+      <div class="row"><button class="btn primary" type="button" data-act="specimport" data-id="${id}" style="font-size:16px;min-height:44px">Download the Innergy import file</button>
+        <span class="meta">${mapped ? `Columns match Innergy’s template (${esc(st.file || 'loaded on Rules')}), ${st.format.toUpperCase()}.` : 'Using the built-in columns. Load Innergy’s opportunity import template on the Rules screen so the columns match exactly.'}${d && d.importedAt ? ` Last downloaded ${fmtDate(d.importedAt.slice(0,10))}.` : ''}</span></div>
+      <p class="meta" style="margin:0">In Innergy, import this file into Sales → Opportunities, then open the new opportunity and attach the requirements file from step 4.</p>
+    </section>`;
+  let reqCard = '';
+  if (d && d.at){
+    const bySec = new Map(); for (const r of reqs){ const k = r.section || 'Other'; if (!bySec.has(k)) bySec.set(k, []); bySec.get(k).push(r); }
+    const rf = d.rfis || [];
+    reqCard = `<section class="card"><h3>4. Spec requirements and RFIs</h3>
+      <p style="margin:0">${reqs.length} requirement${reqs.length===1?'':'s'} from ${d.sections.length} section${d.sections.length===1?'':'s'}, and ${rf.length} possible RFI${rf.length===1?'':'s'}. ${d.unchecked ? `<span class="chip warn">${d.unchecked} to check</span> Their quotes weren’t found word for word in the PDF, so look at the spec before relying on them.` : 'Every quote was found in the PDF.'}</p>
+      <div class="row"><button class="btn primary" type="button" data-act="specxlsx" data-id="${id}">Download requirements and RFIs (Excel)</button><button class="btn" type="button" data-act="specprint" data-id="${id}">Print or save as PDF</button><button class="btn" type="button" data-act="copy" data-src="rfi-text">Copy the RFIs</button></div>
+      <p class="meta" style="margin:0">Attach the Excel or PDF to the opportunity in Innergy so Estimating sees it at bid review.</p>
+      <details ${rf.length ? 'open' : ''}><summary style="cursor:pointer;font-weight:700">Possible RFIs (${rf.length})</summary><div class="group" style="gap:8px;margin-top:8px">
+        ${rf.map((r, i) => `<div class="fbitem" style="border-top:1px solid var(--line);padding-top:8px"><label class="row" style="gap:8px;align-items:flex-start"><input type="checkbox" data-act="rfiinc" data-id="${id}" data-n="${i}" ${r.include?'checked':''}> <span>Send this one</span></label>
+          <textarea id="rfi-${i}" data-act="rfitext" data-id="${id}" data-n="${i}" style="min-height:56px">${esc(r.question)}</textarea>
+          <span class="meta">${esc(r.why)} · ${esc(r.section)}${r.page ? ', p. ' + r.page : ''}${r.ok ? '' : ' <span class="chip warn">Check</span>'}</span><span class="meta" style="font-style:italic">“${esc(r.quote)}”</span></div>`).join('') || '<p class="meta">None found.</p>'}
+      </div></details>
+      <pre class="copybox" id="rfi-text" hidden>${esc(rfiText(id))}</pre>
+      <details><summary style="cursor:pointer;font-weight:700">Requirements by section (${reqs.length})</summary><div class="group" style="gap:10px;margin-top:8px">
+        ${[...bySec.entries()].map(([sec, xs]) => `<div><b>Section ${esc(sec)}</b><ul style="margin:4px 0 0;padding-left:20px">${xs.map(r => `<li><span class="chip">${esc(r.topic)}</span> ${esc(r.text)} <span class="meta">(${r.page ? 'p. ' + r.page : 'page not given'})</span>${r.ok ? '' : ' <span class="chip warn">Check</span>'}<div class="meta" style="font-style:italic">“${esc(r.quote)}”</div></li>`).join('')}</ul></div>`).join('') || '<p class="meta">None.</p>'}
+      </div></details>
+    </section>`;
+  }
+  return `<div class="row">${back}</div>` + head('Bid specs → Innergy: ' + inv.project, 'Turns the bid documents into an Innergy opportunity import file, plus a list of spec requirements and RFIs to attach to it. Claude reads; a person checks every value before it goes into Innergy. Nothing is priced.',
+    ['Add the bid documents (PDFs).', 'Check which sections we’ll read, then press “Read the specs”.', 'Check the Innergy details and download the import file.', 'Download the requirements and RFIs, and attach them to the opportunity in Innergy.'])
+    + filesCard + pickCard + runCard + oppCard + reqCard;
+}
+function specStatus(id){
+  const d = specDoc(id); if (!d) return '';
+  return d.importedAt ? '<span class="pill ok">In Innergy file</span>' : '<span class="pill review">Specs read</span>';
+}
+
+/* Innergy import template on the Rules screen */
+async function readInnergyTemplate(file){
+  try {
+    let aoa, sheet = '';
+    if (/\.csv$/i.test(file.name)) aoa = String(await readFileAs(file, 'text')).split(/\r?\n/).slice(0, 5).map(line => { const o = []; let cur = '', q = false; for (const ch of line){ if (ch === '"') q = !q; else if (ch === ',' && !q){ o.push(cur); cur = ''; } else cur += ch; } o.push(cur); return o; });
+    else { if (!window.XLSX) throw new Error('The spreadsheet reader didn’t load. Save the template as .csv and try again.'); const wb = XLSX.read(new Uint8Array(await readFileAs(file, 'buf')), {type:'array'}); sheet = wb.SheetNames[0]; aoa = XLSX.utils.sheet_to_json(wb.Sheets[sheet], {header:1, raw:false, defval:''}).slice(0, 5); }
+    const headers = (aoa.find(r => r && r.filter(c => String(c).trim()).length >= 2) || []).map(c => String(c).trim()).filter(Boolean);
+    if (!headers.length) throw new Error('No column names were found in the first rows of that file.');
+    const next = {headers, map:autoMap(headers), format: /\.csv$/i.test(file.name) ? 'csv' : 'xlsx', sheet, file:file.name, dateFormat:innergySettings().dateFormat};
+    saveInnergy(next, `Loaded ${headers.length} columns from ${file.name}.`);
+  } catch (e) { toast((e && e.message) || 'That file couldn’t be read.'); }
+}
+function saveInnergy(next, msg){ S.innergy = next; render(); write(() => S.db.doc('settings/innergy').set(next), msg || 'Saved.'); }
+function innergyCard(){
+  const st = innergySettings(); const has = st.headers && st.headers.length;
+  const opts = (cur) => `<option value="" ${!cur?'selected':''}>Leave blank</option>${OPP_FIELDS.map(f => `<option value="${f.k}" ${cur===f.k?'selected':''}>${esc(f.label)}</option>`).join('')}<option value="=" ${cur && cur.startsWith('=')?'selected':''}>Always the same value…</option>`;
+  return `<div class="card"><h3>Innergy import file</h3>
+    <p class="meta" style="margin:0">“Bid specs → Innergy” makes a file to import into Innergy’s opportunities. Load a blank copy of Innergy’s own opportunity import template (or any opportunity export) so the columns match exactly. Everyone uses the same setting.</p>
+    <div class="field"><label for="innergy-file">Innergy’s import template (.xlsx or .csv)</label><input type="file" id="innergy-file" accept=".xlsx,.xls,.csv" data-act="innergyfile"></div>
+    ${has ? `<p style="margin:0">Using <b>${esc(st.file || 'the loaded template')}</b>: ${st.headers.length} columns. Check that each Innergy column gets the right detail.</p>
+      <div class="tablebox" style="max-height:340px;overflow:auto"><table><thead><tr><th>Innergy column</th><th>Filled with</th></tr></thead><tbody>${st.headers.map((h, i) => { const cur = (st.map||{})[h] || ''; return `<tr><td>${esc(h)}</td><td><div class="row" style="gap:6px;flex-wrap:nowrap"><select data-act="innergymap" data-n="${i}" aria-label="What goes in ${esc(h)}">${opts(cur)}</select>${cur.startsWith('=') ? `<input type="text" data-act="innergyfixed" data-n="${i}" value="${esc(cur.slice(1))}" placeholder="Value" aria-label="Value for ${esc(h)}" style="width:140px">` : ''}</div></td></tr>`; }).join('')}</tbody></table></div>
+      <button class="btn" type="button" data-act="innergyreset" style="align-self:flex-start">Go back to the built-in columns</button>`
+    : '<p class="meta" style="margin:0">No template loaded: the file uses the built-in column names (Opportunity name, Customer (GC), Bid date…).</p>'}
+    <div class="row"><label for="innergy-format" class="meta">File type</label><select id="innergy-format" data-act="innergyformat"><option value="csv" ${st.format==='csv'?'selected':''}>CSV</option><option value="xlsx" ${st.format==='xlsx'?'selected':''}>Excel (.xlsx)</option></select>
+      <label for="innergy-date" class="meta">Dates as</label><select id="innergy-date" data-act="innergydate"><option ${st.dateFormat==='MM/DD/YYYY'?'selected':''}>MM/DD/YYYY</option><option ${st.dateFormat==='YYYY-MM-DD'?'selected':''}>YYYY-MM-DD</option></select></div>
+  </div>`;
+}
+
+
 /* ---------- Events ---------- */
 document.addEventListener('click', e => {
   const t = e.target.closest('[data-tab],[data-act]'); if (!t) return;
-  if (t.dataset.tab){ S.tab = t.dataset.tab; S.confirmClear = false; try{ localStorage.setItem('bss-tab', S.tab);}catch(x){} render(); window.scrollTo({top:0}); return; }
+  if (t.dataset.tab){ S.tab = t.dataset.tab; S.specId = null; S.confirmClear = false; try{ localStorage.setItem('bss-tab', S.tab);}catch(x){} render(); window.scrollTo({top:0}); return; }
   const a = t.dataset.act, id = t.dataset.id;
   if (a === 'decide') decide(id, t.dataset.d);
   else if (a === 'undo'){ S.decisions.delete(id); render(); write(() => S.db.doc('decisions/' + id).delete(), 'Undone.'); }
@@ -1070,6 +1524,15 @@ document.addEventListener('click', e => {
   else if (a === 'gctier'){ S.gcTier = t.dataset.t; render(); }
   else if (a === 'gcmore'){ S.gcMore = !S.gcMore; render(); }
   else if (a === 'bulkclear'){ S.bulk = null; render(); }
+  else if (a === 'specopen'){ S.specId = id; S.openId = null; renderOverlay(); render(); window.scrollTo({top:0}); }
+  else if (a === 'specback'){ const back = S.specId; S.specId = null; render(); window.scrollTo({top:0}); document.querySelector(`[data-act="specopen"][data-id="${back}"]`)?.focus(); }
+  else if (a === 'specread') readSpecs(id);
+  else if (a === 'specstop'){ S.specRun && S.specRun.ctl && S.specRun.ctl.abort(); }
+  else if (a === 'specimport') downloadImport(id);
+  else if (a === 'specxlsx') downloadRequirements(id);
+  else if (a === 'specprint') printRequirements(id);
+  else if (a === 'oppalt'){ const d = specDoc(id); const o = d && d.opp[t.dataset.k]; if (!o || !o.alt) return; d.opp = {...d.opp, [t.dataset.k]:{...o.alt}}; d.conflicts = (d.conflicts||[]).filter(k => k !== t.dataset.k); saveSpecBase(id); render(); }
+  else if (a === 'innergyreset'){ saveInnergy({...innergySettings(), headers:null, map:null, file:'', sheet:''}, 'Back to the built-in columns.'); }
   else if (a === 'archive') setArchived([id], true);
   else if (a === 'restore') setArchived([id], false);
   else if (a === 'archpast') setArchived(activeInvites().filter(i => i.due && i.due < today()).map(i => i.id), true);
@@ -1105,6 +1568,15 @@ document.addEventListener('change', e => {
   if (a === 'emlfile'){ const f = t.files && t.files[0]; if (!f) return; fileToText(f).then(x => { S.tryDraft = x; S.tryErr = ''; render(); }, e => { S.tryErr = (e && e.message) || 'That file couldn’t be read.'; render(); showCard('try-card'); }); return; }
   if (a === 'bulkfiles'){ if (t.files && t.files.length) bulkInvites(t.files, t.dataset.where); return; }
   if (a === 'gcfile'){ const f = t.files && t.files[0]; if (f) readGcFile(f); return; }
+  if (a === 'specfiles'){ if (t.files && t.files.length) addSpecFiles(t.dataset.id, t.files); return; }
+  if (a === 'specpick'){ const m = S.specMem[t.dataset.id]; if (m){ t.checked ? m.pick.add(t.dataset.sec) : m.pick.delete(t.dataset.sec); } return; }
+  if (a === 'rfiinc'){ const d = specDoc(t.dataset.id); const r = d && d.rfis[+t.dataset.n]; if (r){ r.include = t.checked; saveSpecBase(t.dataset.id); render(); } return; }
+  if (a === 'oppfield'){ setOpp(t.dataset.id, t.dataset.k, t.value); render(); return; }
+  if (a === 'innergyfile'){ const f = t.files && t.files[0]; if (f) readInnergyTemplate(f); t.value = ''; return; }
+  if (a === 'innergymap'){ const st = innergySettings(); const h = st.headers[+t.dataset.n]; saveInnergy({...st, map:{...st.map, [h]: t.value === '=' ? '=' : t.value}}); return; }
+  if (a === 'innergyformat'){ saveInnergy({...innergySettings(), format:t.value}); return; }
+  if (a === 'innergydate'){ saveInnergy({...innergySettings(), dateFormat:t.value}); return; }
+  if (a === 'innergyfixed'){ const st = innergySettings(); const h = st.headers[+t.dataset.n]; saveInnergy({...st, map:{...st.map, [h]: '=' + t.value}}); return; }
   if (a === 'gcfield') gcField(t.dataset.id, t.dataset.f, t.value);
   else if (a === 'stage'){ const d = S.decisions.get(t.dataset.id); if (!d) return; d.stage = t.value; write(() => S.db.doc('decisions/' + t.dataset.id).update({stage:t.value}), 'Step updated.'); }
   else if (a === 'flag') saveSettings({flags:{[t.dataset.k]:t.checked}});
@@ -1121,6 +1593,8 @@ document.addEventListener('input', e => {
   if (t.dataset.act === 'gcsearch'){ S.gcQuery = t.value; render(); }
   else if (t.dataset.act === 'gcfield' && t.type === 'text') gcField(t.dataset.id, t.dataset.f, t.value);
   else if (t.dataset.act === 'archsearch'){ S.archQuery = t.value; render(); }
+  else if (t.dataset.act === 'oppfield' && t.type === 'text') setOpp(t.dataset.id, t.dataset.k, t.value);
+  else if (t.dataset.act === 'rfitext'){ const d = specDoc(t.dataset.id); const r = d && d.rfis[+t.dataset.n]; if (r){ r.question = t.value; saveSpecBase(t.dataset.id); const pre = document.getElementById('rfi-text'); if (pre) pre.textContent = rfiText(t.dataset.id); } }
   else if (t.id === 'try-text') S.tryDraft = t.value;
   else if (t.id === 'ask-q') S.askDraft = t.value;
 });
@@ -1170,6 +1644,8 @@ render();
   coll('feedback', 'feedback');
   coll('estimates', 'estimates');
   coll('estrows', 'estRows');
+  coll('specs', 'specs');
+  db.doc('settings/innergy').onSnapshot(d => { S.innergy = d.exists ? {...d.data()} : null; render(); }, () => {});
   db.doc('settings/criteria').onSnapshot(d => { if (d.exists) S.settings = {...d.data()}; render(); }, () => {});
   if (c.start) c.start();
 })();
