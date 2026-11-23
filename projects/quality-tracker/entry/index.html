@@ -48,7 +48,7 @@
             <div class="field-group">
               <label class="field-label" for="f-project">Project <span class="req">*</span></label>
               <select id="f-project" onchange="onProjectChange(this)"></select>
-              <div class="add-project-row" id="add-project-row">
+              <div class="add-row" id="add-project-row">
                 <input type="text" id="new-project-name" placeholder="Enter project name…">
                 <button type="button" class="btn-sm btn-add" onclick="confirmAddProject()">Add</button>
                 <button type="button" class="btn-sm btn-cancel" onclick="cancelAddProject()">Cancel</button>
@@ -73,7 +73,12 @@
           <div class="field-row single">
             <div class="field-group">
               <label class="field-label" for="f-category">Issue Category <span class="req">*</span></label>
-              <select id="f-category"></select>
+              <select id="f-category" onchange="onAddableChange(this,'add-category-row','new-category-name')"></select>
+              <div class="add-row" id="add-category-row">
+                <input type="text" id="new-category-name" placeholder="Enter category name…">
+                <button type="button" class="btn-sm btn-add" onclick="confirmAddOption('f-category','add-category-row','new-category-name','categories')">Add</button>
+                <button type="button" class="btn-sm btn-cancel" onclick="cancelAddOption('f-category','add-category-row','new-category-name')">Cancel</button>
+              </div>
             </div>
           </div>
           <div class="field-row single">
@@ -104,11 +109,21 @@
           <div class="field-row">
             <div class="field-group">
               <label class="field-label" for="f-caught">Caught By Department <span class="req">*</span></label>
-              <select id="f-caught"></select>
+              <select id="f-caught" onchange="onAddableChange(this,'add-caught-row','new-caught-name')"></select>
+              <div class="add-row" id="add-caught-row">
+                <input type="text" id="new-caught-name" placeholder="Enter department name…">
+                <button type="button" class="btn-sm btn-add" onclick="confirmAddOption('f-caught','add-caught-row','new-caught-name','depts')">Add</button>
+                <button type="button" class="btn-sm btn-cancel" onclick="cancelAddOption('f-caught','add-caught-row','new-caught-name')">Cancel</button>
+              </div>
             </div>
             <div class="field-group">
               <label class="field-label" for="f-created">Created By Department <span class="req">*</span></label>
-              <select id="f-created"></select>
+              <select id="f-created" onchange="onAddableChange(this,'add-created-row','new-created-name')"></select>
+              <div class="add-row" id="add-created-row">
+                <input type="text" id="new-created-name" placeholder="Enter department name…">
+                <button type="button" class="btn-sm btn-add" onclick="confirmAddOption('f-created','add-created-row','new-created-name','depts')">Add</button>
+                <button type="button" class="btn-sm btn-cancel" onclick="cancelAddOption('f-created','add-created-row','new-created-name')">Cancel</button>
+              </div>
             </div>
           </div>
         </div>
@@ -133,7 +148,12 @@
             <div class="field-row single">
               <div class="field-group">
                 <label class="field-label" for="f-root">Preliminary Root Cause <span class="opt-badge" style="font-size:11px">Optional</span></label>
-                <select id="f-root"></select>
+                <select id="f-root" onchange="onAddableChange(this,'add-root-row','new-root-name')"></select>
+                <div class="add-row" id="add-root-row">
+                  <input type="text" id="new-root-name" placeholder="Enter root cause…">
+                  <button type="button" class="btn-sm btn-add" onclick="confirmAddOption('f-root','add-root-row','new-root-name','rootCauses')">Add</button>
+                  <button type="button" class="btn-sm btn-cancel" onclick="cancelAddOption('f-root','add-root-row','new-root-name')">Cancel</button>
+                </div>
                 <div class="helper-text">Final root cause determined by QC team review</div>
               </div>
             </div>

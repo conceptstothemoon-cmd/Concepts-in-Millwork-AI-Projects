@@ -212,14 +212,14 @@ body {
 }
 .field-row.single { grid-template-columns: 1fr; }
 .field-row.triple { grid-template-columns: 1fr 1fr 1fr; }
-.add-project-row {
+.add-row {
   display: none;
   gap: 8px;
   align-items: flex-end;
   margin-top: 8px;
 }
-.add-project-row.show { display: flex; }
-.add-project-row input {
+.add-row.show { display: flex; }
+.add-row input {
   flex: 1;
   padding: 9px 12px;
   font-size: 14px;
@@ -231,7 +231,7 @@ body {
   outline: none;
   box-shadow: 0 0 0 3px var(--accent-light);
 }
-.add-project-row .btn-sm {
+.add-row .btn-sm {
   padding: 9px 14px;
   border-radius: 6px;
   font-size: 13px;
@@ -241,17 +241,17 @@ body {
   font-family: inherit;
   white-space: nowrap;
 }
-.add-project-row .btn-add {
+.add-row .btn-add {
   background: var(--accent);
   color: #fff;
 }
-.add-project-row .btn-add:hover { opacity: 0.9; }
-.add-project-row .btn-cancel {
+.add-row .btn-add:hover { opacity: 0.9; }
+.add-row .btn-cancel {
   background: var(--bg);
   color: var(--ink-2);
   border: 1px solid var(--border-strong);
 }
-.add-project-row .btn-cancel:hover { background: var(--border); }
+.add-row .btn-cancel:hover { background: var(--border); }
 @media (max-width: 600px) {
   .field-row, .field-row.triple { grid-template-columns: 1fr; }
 }

@@ -31,15 +31,64 @@ function fillProjects() {
   if (current && current !== '__add__') sel.value = current;
 }
 function initDropdowns() {
-  fillSelect($('f-category'), CIM.CATEGORIES, 'Select category…');
-  fillSelect($('f-caught'), CIM.DEPTS, 'Select department…');
-  fillSelect($('f-created'), CIM.DEPTS, 'Select department…');
-  fillSelect($('f-root'), CIM.ROOT_CAUSES.filter(r => r !== 'Pending'), 'Select if known…');
+  fillAddableSelect($('f-category'), CIM.CATEGORIES, 'Select category…', 'categories');
+  fillAddableSelect($('f-caught'), CIM.DEPTS, 'Select department…', 'depts');
+  fillAddableSelect($('f-created'), CIM.DEPTS, 'Select department…', 'depts');
+  fillAddableSelect($('f-root'), CIM.ROOT_CAUSES.filter(r => r !== 'Pending'), 'Select if known…', 'rootCauses');
   fillSelect($('f-status'), CIM.STATUSES);
   $('filter-status').insertAdjacentHTML('beforeend', CIM.STATUSES.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join(''));
   $('filter-sev').insertAdjacentHTML('beforeend', CIM.SEVERITIES.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join(''));
   fillProjects();
 }
+
+// ─── Addable dropdowns (Category, Caught By, Created By, Root Cause) ───
+// Custom values the user types in are kept in this browser's localStorage
+// so they stick around the next time an issue is entered here.
+const CUSTOM_OPTIONS_KEY = 'cimQualityCustomOptions';
+function loadCustomOptions() {
+  try { return JSON.parse(localStorage.getItem(CUSTOM_OPTIONS_KEY)) || {}; } catch (e) { return {}; }
+}
+function saveCustomOption(storeField, name) {
+  const all = loadCustomOptions();
+  all[storeField] = [...new Set([...(all[storeField] || []), name])];
+  try { localStorage.setItem(CUSTOM_OPTIONS_KEY, JSON.stringify(all)); } catch (e) { /* storage blocked */ }
+}
+function fillAddableSelect(sel, baseValues, placeholder, storeField) {
+  const custom = loadCustomOptions()[storeField] || [];
+  const values = [...baseValues, ...custom.filter(v => !baseValues.includes(v))];
+  fillSelect(sel, values, placeholder);
+  sel.insertAdjacentHTML('beforeend', '<option value="__add__">+ Add New…</option>');
+}
+function onAddableChange(sel, rowId, inputId) {
+  const adding = sel.value === '__add__';
+  $(rowId).classList.toggle('show', adding);
+  if (adding) $(inputId).focus();
+}
+function confirmAddOption(selId, rowId, inputId, storeField) {
+  const input = $(inputId);
+  const name = input.value.trim();
+  if (!name) return;
+  const sel = $(selId);
+  const newOpt = document.createElement('option');
+  newOpt.textContent = name;
+  newOpt.value = name;
+  sel.insertBefore(newOpt, sel.querySelector('option[value="__add__"]'));
+  sel.value = name;
+  input.value = '';
+  $(rowId).classList.remove('show');
+  saveCustomOption(storeField, name);
+}
+function cancelAddOption(selId, rowId, inputId) {
+  $(selId).value = '';
+  $(inputId).value = '';
+  $(rowId).classList.remove('show');
+}
+['category', 'caught', 'created', 'root'].forEach(key => {
+  $(`new-${key}-name`).addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); confirmAddOption(`f-${key}`, `add-${key}-row`, `new-${key}-name`, key === 'category' ? 'categories' : key === 'root' ? 'rootCauses' : 'depts'); }
+    if (e.key === 'Escape') cancelAddOption(`f-${key}`, `add-${key}-row`, `new-${key}-name`);
+  });
+});
 
 // ─── Tab navigation ───
 const tabs = document.querySelectorAll('.nav-tab');
