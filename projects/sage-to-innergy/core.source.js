@@ -330,7 +330,10 @@
       { r: 4, cells: [[0, 'What', 6], [1, 'When Sage says', 6], [2, 'Use in Innergy', 6], [3, 'Added', 6]] }];
     rules.forEach((x, i) => ru.push({ r: 5 + i, cells: [[0, S.KINDS[x.kind]], [1, x.from], [2, x.to], [3, x.learned || '']] }));
     await putSheet(zip, 'Rules', sheetXml(ru, [28, 36, 60, 12]), 'Review');
-    return zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE', mimeType: 'application/vnd.ms-excel.sheet.macroEnabled.12' });
+    // copy files only (no folder entries), in the original order, so the package looks like Excel wrote it
+    const out = new JSZip();
+    for (const name of Object.keys(zip.files)) { const f = zip.files[name]; if (!f.dir) out.file(name, await f.async('uint8array'), { date: f.date, createFolders: false }); }
+    return out.generateAsync({ type: 'uint8array', compression: 'DEFLATE', compressionOptions: { level: 6 }, mimeType: 'application/vnd.ms-excel.sheet.macroEnabled.12' });
   }
   S.readWorkbook = readWorkbook; S.fillWorkbook = fillWorkbook; S.COLS = COLS;
 })(typeof window !== 'undefined' ? window : globalThis);
