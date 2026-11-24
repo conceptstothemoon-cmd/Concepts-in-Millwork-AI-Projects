@@ -222,7 +222,8 @@ code { font-family: var(--mono); font-size: 12.5px; background: var(--bg); paddi
   const KINDS = { payTo: 'Vendor -> Pay To', wo: 'Job -> Work order', bg: 'Cost code -> Budget group', gl: 'Debit account -> GL account', terms: 'Vendor -> Terms' };
   const norm = s => clean(s).toLowerCase().replace(/[.,'&]/g, '').replace(/\b(inc|llc|co|corp|company|ltd)\b/g, '').replace(/\s+/g, ' ').trim();
   const ruleGet = (rules, kind, key) => { const k = norm(key); const r = rules.find(r => r.kind === kind && norm(r.from) === k); return r ? r.to : ''; };
-  function jobToProject(job) { const m = /^(\d{2})(\d{4})$/.exec(job); return m ? 'P-' + m[1] + '-' + m[2] : ''; }
+  // Innergy project number = P-<first 2 digits>-<last 4 digits> of the Sage job (261151 -> P-26-1151)
+  function jobToProject(job) { const d = String(job || '').replace(/\D/g, ''); return d.length >= 4 ? 'P-' + d.slice(0, 2) + '-' + d.slice(-4) : ''; }
 
   function buildRows(parsed, lists, rules) {
     const rows = [], skipped = [];
@@ -240,14 +241,14 @@ code { font-family: var(--mono); font-size: 12.5px; background: var(--bg); paddi
         let wo = ruleGet(rules, 'wo', l.job);
         if (!wo) {
           const proj = jobToProject(l.job);
-          const cands = proj ? lists.wo.filter(x => x.toUpperCase().startsWith(proj)) : [];
+          const cands = proj ? lists.wo.filter(x => x.toUpperCase().startsWith(proj + '-')) : [];
           if (cands.length === 1) wo = cands[0];
-          else if (cands.length > 1) { wo = cands[0]; flags.push(cands.length + ' work orders for job ' + l.job + ': check'); }
-          else { wo = 'Job ' + l.job + (parsed.jobNames[l.job] ? ' ' + parsed.jobNames[l.job] : ''); flags.push('No Innergy work order found for job ' + l.job); }
+          else if (cands.length > 1) { wo = cands[0]; flags.push(cands.length + ' work orders on ' + proj + ': check this is the right one'); }
+          else { wo = proj || l.job; flags.push(proj ? 'Pick the ' + proj + ' work order (not in the workbook\u2019s list yet)' : 'Sage job ' + l.job + ' has no Innergy number'); }
         } else if (!inList(lists.wo, wo)) flags.push('Work order not in Innergy list');
-        let bg = ruleGet(rules, 'bg', l.costCode) || ruleGet(rules, 'bg', l.costCode + ' ' + l.category);
-        if (!bg) flags.push('Pick a budget group (cost code ' + (l.costCode || 'none') + ')');
-        else if (!inList(lists.bg, bg)) flags.push('Budget group not in Innergy list');
+        // Budget group is always Other unless a rule says otherwise
+        const bg = ruleGet(rules, 'bg', l.costCode) || 'Other';
+        if (!inList(lists.bg, bg)) flags.push('Budget group ' + bg + ' not in Innergy list');
         const gl = ruleGet(rules, 'gl', l.debit);
         const terms = ruleGet(rules, 'terms', inv.vendorName);
         if (!inv.invDate) flags.push('No invoice date found');

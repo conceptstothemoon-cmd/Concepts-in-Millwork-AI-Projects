@@ -19,8 +19,8 @@ For each invoice line with a job number:
 
 | Innergy column | From the Sage PDF |
 |---|---|
-| WorkOrder | the job (261151 → work order starting `P-26-1151`), or a rule |
-| BudgetGroup | a rule for the cost code |
+| WorkOrder | the Innergy work order for P-<first 2 digits>-<last 4 digits> of the Sage job (261151 → `P-26-1151-…`), or a rule |
+| BudgetGroup | `Other`, unless a rule says otherwise |
 | Cost | the line's amount |
 | PostDate, InvoiceDate | invoice date |
 | DueDate | payment date |
