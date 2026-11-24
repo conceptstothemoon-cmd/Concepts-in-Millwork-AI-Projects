@@ -111,9 +111,11 @@
         if (!wo) {
           const proj = jobToProject(l.job);
           const cands = proj ? lists.wo.filter(x => x.toUpperCase().startsWith(proj + '-')) : [];
-          if (cands.length === 1) wo = cands[0];
-          else if (cands.length > 1) { wo = cands[0]; flags.push(cands.length + ' work orders on ' + proj + ': check this is the right one'); }
-          else { wo = proj || l.job; flags.push(proj ? 'Pick the ' + proj + ' work order (not in the workbook\u2019s list yet)' : 'Sage job ' + l.job + ' has no Innergy number'); }
+          // Expenses go on the project's Accounting work order: "P-26-1151-<number>: <project> - Accounting"
+          const acct = cands.filter(x => /-\s*Accounting\s*$/i.test(x));
+          if (acct.length >= 1) { wo = acct[0]; if (acct.length > 1) flags.push(acct.length + ' Accounting work orders on ' + proj + ': check'); }
+          else if (cands.length) { wo = proj; flags.push('No Accounting work order on ' + proj + ': pick one'); }
+          else { wo = proj || l.job; flags.push(proj ? 'Pick the ' + proj + ' Accounting work order (not in the workbook\u2019s list yet)' : 'Sage job ' + l.job + ' has no Innergy number'); }
         } else if (!inList(lists.wo, wo)) flags.push('Work order not in Innergy list');
         // Budget group is always Other unless a rule says otherwise
         const bg = ruleGet(rules, 'bg', l.costCode) || 'Other';
@@ -122,8 +124,9 @@
         const terms = ruleGet(rules, 'terms', inv.vendorName);
         if (!inv.invDate) flags.push('No invoice date found');
         if (l.amount == null) flags.push('No amount found');
-        const ext = (inv.vendorCode + '-' + inv.invoice + '-' + (i + 1)).replace(/\s+/g, '');
-        rows.push({
+        // ExternalId is the Sage vendor code (the capital letters before the vendor name)
+        const ext = inv.vendorCode;
+        rows.push({ key: (inv.vendorCode + '|' + inv.invoice + '|' + (i + 1) + '|' + (parsed.file || '')),
           WorkOrder: wo, BudgetGroup: bg, LaborItem: '', Hours: null, Cost: l.amount, PostDate: inv.invDate, Status: 'Open',
           ExternalId: ext, Notes: l.desc || inv.desc, 'GL Account': gl, Terms: terms, 'Pay To': payTo,
           VendorInvoiceNumber: inv.invoice, InvoiceDate: inv.invDate, DueDate: inv.dueDate,
@@ -148,7 +151,7 @@
       else { rules.push({ kind, from, to, learned: today() }); learned.push([kind, from, to]); }
     };
     for (const rv of review) {
-      const cur = current.find(c => clean(c.ExternalId) === clean(rv.ExternalId)); if (!cur) continue;
+      const cur = current.find(c => c._row === rv.inputRow && clean(c.ExternalId) === clean(rv.ExternalId)); if (!cur) continue;
       if (cur.WorkOrder && cur.WorkOrder !== rv.WorkOrder) set('wo', rv.job, cur.WorkOrder);
       if (cur.BudgetGroup && cur.BudgetGroup !== rv.BudgetGroup) set('bg', rv.costCode, cur.BudgetGroup);
       if (cur['GL Account'] && cur['GL Account'] !== rv['GL Account']) set('gl', rv.debit, cur['GL Account']);
@@ -183,10 +186,10 @@
     if (!wb.Sheets.Input) throw new Error('This workbook has no Input sheet. Use the INNERGY_addedExpenses workbook.');
     const lists = { wo: firstCol('workOrderNameList'), payTo: firstCol('payToList'), bg: firstCol('budgetGroupList'), gl: firstCol('coaList'), terms: firstCol('termsList') };
     // costInput table: header on row 4, columns B..P
-    const inRows = XLSX.utils.sheet_to_json(wb.Sheets.Input, { header: 1, defval: null, blankrows: true });
+    const inRows = XLSX.utils.sheet_to_json(wb.Sheets.Input, { header: 1, defval: null, blankrows: true, range: 0 });
     const hi = inRows.findIndex(r => r && r.includes('WorkOrder')), k0 = hi >= 0 ? inRows[hi].indexOf('WorkOrder') : 0;
     const current = [];
-    if (hi >= 0) for (let i = hi + 1; i < inRows.length; i++) { const r = inRows[i] || []; const o = {}; COLS.forEach((c, k) => o[c] = r[k0 + k] == null ? '' : r[k0 + k]); if (COLS.some(c => o[c] !== '' && c !== 'Status')) current.push(o); }
+    if (hi >= 0) for (let i = hi + 1; i < inRows.length; i++) { const r = inRows[i] || []; const o = {}; COLS.forEach((c, k) => o[c] = r[k0 + k] == null ? '' : r[k0 + k]); o._row = i + 1; if (COLS.some(c => o[c] !== '' && c !== 'Status')) current.push(o); }
     // Rules
     const rules = [];
     if (wb.Sheets.Rules) for (const r of XLSX.utils.sheet_to_json(wb.Sheets.Rules, { header: 1, blankrows: true, range: 0 }).slice(4)) {
@@ -198,7 +201,7 @@
       const rr = XLSX.utils.sheet_to_json(wb.Sheets.Review, { header: 1, blankrows: true, range: 0 });
       const h = rr.findIndex(r => r && r[0] === 'Input row');
       if (h >= 0) for (let i = h + 1; i < rr.length; i++) { const r = rr[i]; if (!r || r[1] == null) break;
-        review.push({ ExternalId: String(r[1]), vendorName: r[4] || '', job: r[9] != null ? String(r[9]) : '', costCode: r[11] || '', debit: r[13] || '', WorkOrder: r[17] || '', BudgetGroup: r[18] || '', 'GL Account': r[19] || '', 'Pay To': r[20] || '', Terms: r[21] || '' }); }
+        review.push({ inputRow: +r[0], ExternalId: String(r[1]), vendorName: r[4] || '', job: r[9] != null ? String(r[9]) : '', costCode: r[11] || '', debit: r[13] || '', WorkOrder: r[17] || '', BudgetGroup: r[18] || '', 'GL Account': r[19] || '', 'Pay To': r[20] || '', Terms: r[21] || '' }); }
     }
     return { lists, current, rules, review };
   }

@@ -19,13 +19,13 @@ For each invoice line with a job number:
 
 | Innergy column | From the Sage PDF |
 |---|---|
-| WorkOrder | the Innergy work order for P-<first 2 digits>-<last 4 digits> of the Sage job (261151 → `P-26-1151-…`), or a rule |
+| WorkOrder | the project's **Accounting** work order from the dropdown list, `P-<first 2>-<last 4>-<number>: <project> - Accounting` (Sage 261151 → `P-26-1151-…: … - Accounting`), or a rule |
 | BudgetGroup | `Other`, unless a rule says otherwise |
 | Cost | the line's amount |
 | PostDate, InvoiceDate | invoice date |
 | DueDate | payment date |
 | Status | `Open` |
-| ExternalId | `VENDORCODE-INVOICE-LINE`, so Innergy's duplicate check works |
+| ExternalId | the Sage vendor code (the capital letters before the vendor name, e.g. `MCMAST`) |
 | Notes | the line's description |
 | GL Account | a rule for the Sage debit account |
 | Terms | a rule for the vendor |
