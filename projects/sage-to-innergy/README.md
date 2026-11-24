@@ -29,7 +29,7 @@ For each invoice line with a job number:
 | Notes | the line's description |
 | GL Account | a rule for the Sage debit account |
 | Terms | a rule for the vendor |
-| Pay To | the vendor name without its Sage code, or a rule |
+| Pay To | left empty for now (the vendor name is on the Review sheet) |
 | VendorInvoiceNumber | invoice number |
 
 Lines with no job are left out and listed on the Review sheet. Each PDF's total is checked against its own Job Cost Recap.

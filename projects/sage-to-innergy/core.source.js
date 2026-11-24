@@ -104,10 +104,8 @@
       if (!jobLines.length) { skipped.push(inv); continue; }
       jobLines.forEach((l, i) => {
         const flags = [];
-        // Pay To: rule, else exact list name, else a list name that starts with the vendor's name, else the PDF name
-        let payTo = ruleGet(rules, 'payTo', inv.vendorName) || ruleGet(rules, 'payTo', inv.vendorCode);
-        if (!payTo) { const n = norm(inv.vendorName); payTo = lists.payTo.find(x => norm(x) === n) || lists.payTo.find(x => norm(x.split(' - ')[0]) === n) || ''; }
-        if (!payTo) { payTo = inv.vendorName; if (lists.payTo.length) flags.push('Pay To not in Innergy list'); }
+        // Pay To left empty for now (Dani's call, Nov 24); the vendor name stays on the Review sheet
+        const payTo = '';
         // Work order: rule, else the only work order for that project, else the first one (flagged)
         let wo = ruleGet(rules, 'wo', l.job);
         if (!wo) {
@@ -154,7 +152,7 @@
       if (cur.WorkOrder && cur.WorkOrder !== rv.WorkOrder) set('wo', rv.job, cur.WorkOrder);
       if (cur.BudgetGroup && cur.BudgetGroup !== rv.BudgetGroup) set('bg', rv.costCode, cur.BudgetGroup);
       if (cur['GL Account'] && cur['GL Account'] !== rv['GL Account']) set('gl', rv.debit, cur['GL Account']);
-      if (cur['Pay To'] && cur['Pay To'] !== rv['Pay To']) set('payTo', rv.vendorName, cur['Pay To']);
+      // Pay To isn't filled for now, so there's nothing to learn for it
       if (cur.Terms && cur.Terms !== rv.Terms) set('terms', rv.vendorName, cur.Terms);
     }
     return learned;
