@@ -6,12 +6,18 @@ Reads Sage AP journal PDFs (Enter Invoices, Import Invoices, Record Payments Cre
 
 Open <https://conceptstothemoon-cmd.github.io/Concepts-in-Millwork-AI-Projects/projects/sage-to-innergy/>, or double-click `index.html` in a downloaded copy.
 
-1. Drop the INNERGY_addedExpenses `.xlsm` you post from (refresh its lists in Excel first).
-2. Drop one or more Sage journal PDFs.
-3. Check the lines, then download the filled workbook. It downloads as `.xlsm`.
-4. In Excel: Enable Content, read the **Review** sheet, fix yellow rows on the **Input** sheet, run the duplicate check, post.
+**In Chrome or Edge (from the GitHub Pages link):**
 
-Everything runs in the browser. Nothing is uploaded, and the workbook's macros, Setup sheet (API key), Power Query connections and Innergy lists are copied through unchanged. Only the Input sheet's `costInput` rows change, and **Review** and **Rules** sheets are added.
+1. Click **Choose workbook** once and pick the INNERGY_addedExpenses `.xlsm` in the posting folder. The page remembers it on this computer. Later visits only ask to **Allow access**.
+2. Drop one or more Sage journal PDFs.
+3. Check the lines, then click **Save into …**. The rows go straight into that same file; nothing downloads. Close the workbook in Excel first.
+4. In Excel: open the workbook (its Innergy lists refresh on open), read the **Review** sheet, fix yellow rows on the **Input** sheet, run the duplicate check, post, save.
+
+If the Input sheet still has rows that haven't been posted (no "Sent" status), the page asks before replacing them.
+
+**Other browsers, or the claude.ai copy:** drop the workbook each time and download the filled copy (as `.xlsm`, or inside a `.zip` on claude.ai).
+
+Everything runs in the browser. Nothing is uploaded, and the workbook's macros, Setup sheet (API key), Power Query connections and Innergy lists are copied through unchanged. Only the Input sheet's `costInput` rows change, **Review** and **Rules** sheets are added, and the five list queries (work orders, pay-to, budget groups, labor, terms) are set to refresh when the workbook opens. The posting query is never set to refresh on open.
 
 ## What it pulls
 

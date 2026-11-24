@@ -189,7 +189,7 @@
     const inRows = XLSX.utils.sheet_to_json(wb.Sheets.Input, { header: 1, defval: null, blankrows: true, range: 0 });
     const hi = inRows.findIndex(r => r && r.includes('WorkOrder')), k0 = hi >= 0 ? inRows[hi].indexOf('WorkOrder') : 0;
     const current = [];
-    if (hi >= 0) for (let i = hi + 1; i < inRows.length; i++) { const r = inRows[i] || []; const o = {}; COLS.forEach((c, k) => o[c] = r[k0 + k] == null ? '' : r[k0 + k]); o._row = i + 1; if (COLS.some(c => o[c] !== '' && c !== 'Status')) current.push(o); }
+    if (hi >= 0) for (let i = hi + 1; i < inRows.length; i++) { const r = inRows[i] || []; const o = {}; COLS.forEach((c, k) => o[c] = r[k0 + k] == null ? '' : r[k0 + k]); o._row = i + 1; o._status = r[k0 + COLS.length + 1] == null ? '' : String(r[k0 + COLS.length + 1]); if (COLS.some(c => o[c] !== '' && c !== 'Status')) current.push(o); }
     // Rules
     const rules = [];
     if (wb.Sheets.Rules) for (const r of XLSX.utils.sheet_to_json(wb.Sheets.Rules, { header: 1, blankrows: true, range: 0 }).slice(4)) {
@@ -203,7 +203,9 @@
       if (h >= 0) for (let i = h + 1; i < rr.length; i++) { const r = rr[i]; if (!r || r[1] == null) break;
         review.push({ inputRow: +r[0], ExternalId: String(r[1]), vendorName: r[4] || '', job: r[9] != null ? String(r[9]) : '', costCode: r[11] || '', debit: r[13] || '', WorkOrder: r[17] || '', BudgetGroup: r[18] || '', 'GL Account': r[19] || '', 'Pay To': r[20] || '', Terms: r[21] || '' }); }
     }
-    return { lists, current, rules, review };
+    // rows on the Input sheet that the macro hasn't posted yet (its Status column says "Sent: ..." once posted)
+    const unposted = current.filter(o => !/^(Sent|Operation completed)/i.test(String(o._status || '').trim())).length;
+    return { lists, current, rules, review, unposted };
   }
 
   async function sheetPath(zip, name) {
@@ -312,6 +314,14 @@
     tableXml = tableXml.replace(/ ref="[A-Z]+\d+:[A-Z]+\d+"/g, ' ref="' + ref[1] + headRow + ':' + ref[3] + newLast + '"');
     zip.file(tablePath, tableXml);
 
+    // Refresh the Innergy lists every time the workbook opens (the list queries only; never the posting query)
+    const REFRESH = ['Query - budgetGroupList', 'Query - laborList', 'Query - payToList', 'Query - termsList', 'Query - workOrderNameList'];
+    const cf = zip.file('xl/connections.xml');
+    if (cf) {
+      let cx = await cf.async('string');
+      cx = cx.replace(/<connection [^>]*>/g, tag => { const n = / name="([^"]+)"/.exec(tag); if (!n || !REFRESH.includes(n[1]) || / refreshOnLoad=/.test(tag)) return tag; return tag.replace(/<connection /, '<connection refreshOnLoad="1" '); });
+      zip.file('xl/connections.xml', cx);
+    }
     const sty = await addStyles(zip);
     // Review sheet
     const rv = [];

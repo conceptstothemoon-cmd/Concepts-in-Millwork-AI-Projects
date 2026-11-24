@@ -29,7 +29,11 @@ h2 { font-size: 16px; font-weight: 600; margin: 0 }
 .drop { position: relative; background: var(--panel); border: 1.5px dashed var(--line); border-radius: 10px; padding: 18px; display: grid; gap: 8px; min-width: 0; cursor: pointer; }
 .drop:hover, .drop.over, .drop:focus-within { border-color: var(--accent) }
 .drop.done { border-style: solid; border-color: var(--accent) }
-.drop input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+.drop input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+.drop.fsa input[type=file] { display: none }
+.drop.fsa { cursor: default }
+#wb-actions button { padding: 8px 14px; font-size: 14px }
+.check input { margin-top: 3px }
 .step { font: 500 12px var(--mono); color: var(--accent); letter-spacing: .06em; text-transform: uppercase }
 .drop p { margin: 0; color: var(--muted) }
 .files { display: grid; gap: 4px; font-size: 13.5px; }
@@ -79,9 +83,10 @@ code { font-family: var(--mono); font-size: 12.5px; background: var(--bg); paddi
   <section class="drops" aria-label="Files">
     <label class="drop" id="drop-wb">
       <span class="step">1 · Innergy workbook</span>
-      <h2>Drop INNERGY_addedExpenses (.xlsm)</h2>
-      <p>Use the copy you post from. Refresh its lists in Excel first so work orders and vendors match Innergy.</p>
+      <h2 id="wb-title">Drop INNERGY_addedExpenses (.xlsm)</h2>
+      <p id="wb-help">Use the copy you post from. Refresh its lists in Excel first so work orders match Innergy.</p>
       <div class="files" id="wb-info"></div>
+      <div class="row" id="wb-actions" hidden></div>
       <input type="file" id="in-wb" accept=".xlsm,.xlsx" aria-label="Choose the Innergy workbook">
     </label>
     <label class="drop" id="drop-pdf">
@@ -105,6 +110,7 @@ code { font-family: var(--mono); font-size: 12.5px; background: var(--bg); paddi
     <div class="scroll"><table id="tbl"></table></div>
     <details id="skipped"></details>
     <div id="learned"></div>
+    <label class="check warn" id="replace-box" hidden style="cursor:pointer"><input type="checkbox" id="replace-ok"> <span id="replace-text"></span></label>
     <div class="row">
       <button id="btn-dl" type="button" disabled>Download filled workbook</button>
       <span class="note" id="dl-note"></span>
@@ -114,11 +120,11 @@ code { font-family: var(--mono); font-size: 12.5px; background: var(--bg); paddi
   <section class="panel">
     <h2>Then, in Excel</h2>
     <ol class="how">
-      <li>Open the downloaded workbook and click <b>Enable Content</b> so the macros run.</li>
-      <li>Read the <b>Review</b> sheet. Rows marked in yellow need a work order, budget group or vendor picked.</li>
+      <li id="how-open">Open the downloaded workbook from your trusted posting folder. Its Innergy lists refresh on their own when it opens.</li>
+      <li>Read the <b>Review</b> sheet. Rows marked in yellow need a work order picked.</li>
       <li>Fix those on the <b>Input</b> sheet with its dropdowns. Change anything else there too.</li>
       <li>Run the duplicate check, then post to Innergy as usual.</li>
-      <li>Next time, drop this same workbook here. The tool saves your fixes to the <b>Rules</b> sheet and fills them in for you.</li>
+      <li id="how-next">Save and close the workbook. Next time, drop this same workbook here; the tool saves your fixes to the <b>Rules</b> sheet and fills them in for you.</li>
     </ol>
   </section>
 </div>
@@ -318,7 +324,7 @@ code { font-family: var(--mono); font-size: 12.5px; background: var(--bg); paddi
     const inRows = XLSX.utils.sheet_to_json(wb.Sheets.Input, { header: 1, defval: null, blankrows: true, range: 0 });
     const hi = inRows.findIndex(r => r && r.includes('WorkOrder')), k0 = hi >= 0 ? inRows[hi].indexOf('WorkOrder') : 0;
     const current = [];
-    if (hi >= 0) for (let i = hi + 1; i < inRows.length; i++) { const r = inRows[i] || []; const o = {}; COLS.forEach((c, k) => o[c] = r[k0 + k] == null ? '' : r[k0 + k]); o._row = i + 1; if (COLS.some(c => o[c] !== '' && c !== 'Status')) current.push(o); }
+    if (hi >= 0) for (let i = hi + 1; i < inRows.length; i++) { const r = inRows[i] || []; const o = {}; COLS.forEach((c, k) => o[c] = r[k0 + k] == null ? '' : r[k0 + k]); o._row = i + 1; o._status = r[k0 + COLS.length + 1] == null ? '' : String(r[k0 + COLS.length + 1]); if (COLS.some(c => o[c] !== '' && c !== 'Status')) current.push(o); }
     // Rules
     const rules = [];
     if (wb.Sheets.Rules) for (const r of XLSX.utils.sheet_to_json(wb.Sheets.Rules, { header: 1, blankrows: true, range: 0 }).slice(4)) {
@@ -332,7 +338,9 @@ code { font-family: var(--mono); font-size: 12.5px; background: var(--bg); paddi
       if (h >= 0) for (let i = h + 1; i < rr.length; i++) { const r = rr[i]; if (!r || r[1] == null) break;
         review.push({ inputRow: +r[0], ExternalId: String(r[1]), vendorName: r[4] || '', job: r[9] != null ? String(r[9]) : '', costCode: r[11] || '', debit: r[13] || '', WorkOrder: r[17] || '', BudgetGroup: r[18] || '', 'GL Account': r[19] || '', 'Pay To': r[20] || '', Terms: r[21] || '' }); }
     }
-    return { lists, current, rules, review };
+    // rows on the Input sheet that the macro hasn't posted yet (its Status column says "Sent: ..." once posted)
+    const unposted = current.filter(o => !/^(Sent|Operation completed)/i.test(String(o._status || '').trim())).length;
+    return { lists, current, rules, review, unposted };
   }
 
   async function sheetPath(zip, name) {
@@ -441,6 +449,14 @@ code { font-family: var(--mono); font-size: 12.5px; background: var(--bg); paddi
     tableXml = tableXml.replace(/ ref="[A-Z]+\d+:[A-Z]+\d+"/g, ' ref="' + ref[1] + headRow + ':' + ref[3] + newLast + '"');
     zip.file(tablePath, tableXml);
 
+    // Refresh the Innergy lists every time the workbook opens (the list queries only; never the posting query)
+    const REFRESH = ['Query - budgetGroupList', 'Query - laborList', 'Query - payToList', 'Query - termsList', 'Query - workOrderNameList'];
+    const cf = zip.file('xl/connections.xml');
+    if (cf) {
+      let cx = await cf.async('string');
+      cx = cx.replace(/<connection [^>]*>/g, tag => { const n = / name="([^"]+)"/.exec(tag); if (!n || !REFRESH.includes(n[1]) || / refreshOnLoad=/.test(tag)) return tag; return tag.replace(/<connection /, '<connection refreshOnLoad="1" '); });
+      zip.file('xl/connections.xml', cx);
+    }
     const sty = await addStyles(zip);
     // Review sheet
     const rv = [];
@@ -479,7 +495,43 @@ code { font-family: var(--mono); font-size: 12.5px; background: var(--bg); paddi
   const mdy = s => { if (!s) return ''; const [y, m, d] = s.split('-'); return +m + '/' + +d + '/' + y; };
   pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-  const st = { wb: null, wbName: '', W: null, learned: [], pdfs: [], result: null };
+  const st = { wb: null, wbName: '', W: null, learned: [], pdfs: [], result: null, handle: null };
+
+  // ---- Remembered workbook (Chrome/Edge, page opened on its own, not inside another site)
+  // The page keeps a pointer to the file on this computer (not a copy) and writes each batch back into it.
+  const FSA = 'showOpenFilePicker' in window && (() => { try { return window.self === window.top; } catch (e) { return false; } })();
+  const idb = (mode, fn) => new Promise((res, rej) => { let r; try { r = indexedDB.open('sage-to-innergy', 1); } catch (e) { return rej(e); }
+    r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onerror = () => rej(r.error);
+    r.onsuccess = () => { try { const tx = r.result.transaction('kv', mode); const q = fn(tx.objectStore('kv')); tx.oncomplete = () => res(q && q.result); tx.onerror = () => rej(tx.error); } catch (e) { rej(e); } }; });
+  const saveHandle = h => idb('readwrite', s => h ? s.put(h, 'wb') : s.delete('wb')).catch(() => {});
+  const loadHandle = () => idb('readonly', s => s.get('wb')).catch(() => null);
+
+  async function useHandle(h, ask) {
+    const opts = { mode: 'readwrite' };
+    let perm = await h.queryPermission(opts);
+    if (perm !== 'granted' && ask) perm = await h.requestPermission(opts);
+    st.handle = h; saveHandle(h); // remembered for next visit (best effort)
+    if (perm !== 'granted') { showConnect('allow'); return; }
+    await loadWorkbook(await h.getFile());
+    showConnect('ok');
+  }
+  async function connect() {
+    try { const [h] = await window.showOpenFilePicker({ types: [{ description: 'Excel workbook', accept: { 'application/vnd.ms-excel.sheet.macroEnabled.12': ['.xlsm'] } }], excludeAcceptAllOption: false, multiple: false }); await useHandle(h, true); }
+    catch (e) { if (e && e.name !== 'AbortError') fail('Could not open that workbook: ' + e.message); }
+  }
+  function showConnect(state) {
+    const a = $('#wb-actions'); a.hidden = false; $('#drop-wb').classList.add('fsa');
+    $('#wb-title').textContent = 'INNERGY_addedExpenses workbook';
+    if (state === 'none') { $('#wb-help').textContent = 'Choose the workbook in your posting folder once. The tool remembers it and saves each batch straight into it, so there\u2019s nothing to download.'; a.innerHTML = '<button type="button" data-a="connect">Choose workbook</button>'; }
+    if (state === 'allow') { $('#wb-help').textContent = 'Click Allow so the tool can read and save ' + st.handle.name + ' again.'; $('#wb-info').innerHTML = '<div><span class="nm">' + esc(st.handle.name) + '</span></div>'; a.innerHTML = '<button type="button" data-a="allow">Allow access</button><button type="button" class="ghost" data-a="connect">Use a different workbook</button>'; }
+    $('#how-open').textContent = 'Open the workbook from your posting folder. Its Innergy lists refresh on their own when it opens.';
+    $('#how-next').innerHTML = 'Save and close the workbook. Next time, just open this page and drop the new PDFs: it remembers the workbook, saves your fixes to the <b>Rules</b> sheet and fills them in for you.';
+    if (state === 'ok') { $('#wb-help').textContent = 'Remembered. Each batch is saved into this file. Close it in Excel before saving.'; a.innerHTML = '<button type="button" class="ghost" data-a="reload">Reload from file</button><button type="button" class="ghost" data-a="connect">Use a different workbook</button>'; }
+  }
+  $('#wb-actions').addEventListener('click', async e => { const b = e.target.closest('button'); if (!b) return; e.preventDefault(); e.stopPropagation();
+    if (b.dataset.a === 'connect') connect();
+    if (b.dataset.a === 'allow' && st.handle) useHandle(st.handle, true);
+    if (b.dataset.a === 'reload' && st.handle) useHandle(st.handle, false); });
 
   function fail(msg) { const e = $('#err'); e.textContent = msg; e.hidden = !msg; }
 
@@ -489,7 +541,7 @@ code { font-family: var(--mono); font-size: 12.5px; background: var(--bg); paddi
       const buf = new Uint8Array(await file.arrayBuffer());
       const W = SageInv.readWorkbook(XLSX, buf);
       st.learned = SageInv.learn(W.review, W.current, W.rules);
-      st.wb = buf; st.wbName = file.name; st.W = W;
+      st.wb = buf; st.wbName = file.name; st.W = W; st.wbModified = file.lastModified;
       const L = W.lists;
       $('#wb-info').innerHTML = '<div><span class="nm">' + esc(file.name) + '</span></div>' +
         '<div><span class="st">' + L.wo.length + ' work orders · ' + L.payTo.length + ' pay-to · ' + L.bg.length + ' budget groups · ' + W.rules.length + ' rules</span></div>';
@@ -551,27 +603,41 @@ code { font-family: var(--mono); font-size: 12.5px; background: var(--bg); paddi
       else checks.push(['bad', 'Differs', f.name + ': pulled ' + money(f.pulled) + ' but the Job Cost Recap says ' + money(f.recap) + '. Compare the Review sheet with the PDF before posting.']);
     }
     if (!st.W) checks.push(['warn', 'Next', 'Add the Innergy workbook (step 1) to match work orders and vendors and to download.']);
-    else if (!W.lists.wo.length || /Jonah/.test(W.lists.wo[0] || '')) checks.push(['warn', 'Lists', 'This workbook’s Innergy lists look like the sample data. Refresh them in Excel (it needs the API key), then drop the workbook again.']);
+    else if (!W.lists.wo.length || /Jonah/.test(W.lists.wo[0] || '')) checks.push(['warn', 'Lists', 'This workbook’s Innergy lists look like the sample data. Refresh them in Excel (it needs the API key), save, then ' + (st.handle ? 'click Reload from file.' : 'drop the workbook again.')]);
     $('#checks').innerHTML = checks.map(([c, d, t]) => '<div class="check ' + c + '"><span class="dot">' + d + '</span><span>' + esc(t) + '</span></div>').join('');
     $('#tbl').innerHTML = '<thead><tr><th>Work order</th><th>Budget group</th><th>Cost</th><th>Post date</th><th>Pay To</th><th>Invoice</th><th>Sage job</th><th>Notes</th><th>Check</th></tr></thead><tbody>' +
       rows.map(r => '<tr><td class="wo">' + esc(r.WorkOrder) + '</td><td>' + esc(r.BudgetGroup) + '</td><td class="n">' + money(r.Cost) + '</td><td class="m">' + mdy(r.PostDate) + '</td><td>' + esc(r['Pay To']) + '</td><td class="m">' + esc(r.VendorInvoiceNumber) + '</td><td class="m">' + esc(r.src.job) + (r.src.costCode ? ' · ' + esc(r.src.costCode) : '') + '</td><td>' + esc(r.Notes) + '</td><td class="ck">' + (r.flags.length ? r.flags.map(f => '<span class="flag">' + esc(f) + '</span>').join('') : '<span class="okc">Ready</span>') + '</td></tr>').join('') + '</tbody>';
     $('#skipped').innerHTML = '<summary>Left out: ' + skipped.length + ' invoices with no job number (' + money(skipped.reduce((a, s) => a + (s.total || 0), 0)) + ')</summary><div class="scroll" style="margin-top:10px"><table><thead><tr><th>Vendor</th><th>Invoice</th><th>Date</th><th>Amount</th><th>Description</th></tr></thead><tbody>' +
       skipped.map(s => '<tr><td>' + esc(s.vendorName) + '</td><td class="m">' + esc(s.invoice) + '</td><td class="m">' + mdy(s.invDate) + '</td><td class="n">' + money(s.total) + '</td><td>' + esc(s.desc) + '</td></tr>').join('') + '</tbody></table></div>';
     $('#learned').innerHTML = st.learned.length ? '<p class="note"><b>Learned from your edits last time</b> (saved to the Rules sheet):</p><ul class="learned">' + st.learned.map(([k, f, t]) => '<li>' + esc(SageInv.KINDS[k]) + ': <code>' + esc(f) + '</code> → ' + esc(t) + '</li>').join('') + '</ul>' : '';
-    $('#btn-dl').disabled = !st.wb || !rows.length;
-    $('#dl-note').textContent = !st.wb ? 'Add the Innergy workbook to download.' : !rows.length ? 'No job lines to send.' : 'Rows on the Input sheet are replaced with these ' + rows.length + '. Post anything already there first.';
+    const unposted = st.W ? st.W.unposted : 0;
+    $('#replace-box').hidden = !unposted;
+    if (unposted) $('#replace-text').textContent = unposted + ' row' + (unposted === 1 ? ' on the Input sheet hasn\u2019t' : 's on the Input sheet haven\u2019t') + ' been posted to Innergy yet. Post them first, or tick here to replace them with this batch.';
+    $('#btn-dl').textContent = st.handle ? 'Save into ' + st.wbName : 'Download filled workbook';
+    $('#btn-dl').disabled = !st.wb || !rows.length || (unposted > 0 && !$('#replace-ok').checked);
+    $('#dl-note').textContent = !st.wb ? 'Add the Innergy workbook first.' : !rows.length ? 'No job lines to send.' : 'Replaces the rows on the Input sheet with these ' + rows.length + ' lines.';
   }
 
   async function download() {
+    if (st.handle) { try { const f = await st.handle.getFile(); if (f.lastModified !== st.wbModified) { const keep = $('#replace-ok').checked; await loadWorkbook(f); $('#replace-ok').checked = keep; rebuild(); } } catch (e) { fail('Could not read ' + st.wbName + ': ' + e.message); return; } }
     const r = st.result; if (!r || !st.wb) return;
     const btn = $('#btn-dl'); btn.disabled = true; const note = $('#dl-note');
+    if (st.W && st.W.unposted && !$('#replace-ok').checked) { btn.disabled = false; rebuild(); note.textContent = 'The workbook has rows that aren\u2019t posted yet. Post them first, or tick the box above to replace them.'; return; }
     try {
       const summary = 'Pulled ' + r.rows.length + ' job lines (' + money(r.pulled) + ') from ' + st.pdfs.filter(p => p.parsed).map(p => p.name).join(', ') + '. Job Cost Recap total: ' + money(r.recap) + '. Left out ' + r.skipped.length + ' invoices with no job. Made ' + SageInv.today() + '.';
       const out = await SageInv.fillWorkbook(JSZip, st.wb.slice(0), r.rows, { summary, skipped: r.skipped }, st.W.rules.slice());
       const base = st.wbName.replace(/\.(xlsm|xlsx)$/i, '');
       const name = base + ' - Sage ' + SageInv.today() + '.xlsm';
-      const dl = window.claude && window.claude.use ? await window.claude.use('downloads') : null;
-      if (dl) {
+      const dl = !st.handle && window.claude && window.claude.use ? await window.claude.use('downloads') : null;
+      if (st.handle) {
+        // re-read the file right before writing so nothing saved in Excel since is lost from the learning step
+        try { const w = await st.handle.createWritable(); await w.write(out); await w.close(); }
+        catch (e) { throw new Error(/NoModification|InvalidState|lock|in use/i.test(e.name + ' ' + e.message) ? st.wbName + ' is open in Excel. Close it there, then click Save again.' : e.message); }
+        st.pdfs = []; showPdfs();
+        await loadWorkbook(await st.handle.getFile());
+        note.textContent = 'Saved into ' + st.wbName + ' (' + r.rows.length + ' lines). Open it in Excel to check and post. This page is ready for the next PDFs.';
+        btn.disabled = false; return;
+      } else if (dl) {
         // claude.ai only saves allowlisted types, and .xlsm isn't one: hand it over inside a .zip
         const z = new JSZip(); z.file(name, out);
         const zb = await z.generateAsync({ type: 'blob' });
@@ -594,9 +660,15 @@ code { font-family: var(--mono); font-size: 12.5px; background: var(--bg); paddi
     ['dragleave', 'drop'].forEach(ev => zone.addEventListener(ev, () => zone.classList.remove('over')));
     zone.addEventListener('drop', e => { e.preventDefault(); const fs = [...(e.dataTransfer.files || [])]; if (fs.length) handler(fs); });
   }
+  if (FSA) {
+    $('#drop-wb').addEventListener('click', e => { if (!e.target.closest('button')) e.preventDefault(); });
+    $('#drop-wb').addEventListener('drop', async e => { const it = [...(e.dataTransfer.items || [])].find(i => i.kind === 'file'); if (it && it.getAsFileSystemHandle) { e.preventDefault(); e.stopImmediatePropagation(); const h = await it.getAsFileSystemHandle(); if (h && h.kind === 'file' && /\.xlsm$/i.test(h.name)) useHandle(h, true); else fail('Drop the INNERGY_addedExpenses .xlsm here.'); } }, true);
+    loadHandle().then(h => h ? useHandle(h, false) : showConnect('none'));
+  }
   wireDrop($('#drop-wb'), $('#in-wb'), fs => { const f = fs.find(f => /\.xls[mx]$/i.test(f.name)); if (f) loadWorkbook(f); else fail('That isn’t an Excel workbook. Drop the INNERGY_addedExpenses .xlsm.'); });
   wireDrop($('#drop-pdf'), $('#in-pdf'), fs => { const p = fs.filter(f => /\.pdf$/i.test(f.name)); const w = fs.find(f => /\.xls[mx]$/i.test(f.name)); if (w) loadWorkbook(w); if (p.length) loadPdfs(p); else if (!w) fail('Drop Sage PDF journals here.'); });
   $('#btn-dl').addEventListener('click', download);
+  $('#replace-ok').addEventListener('change', rebuild);
   $('#btn-clear').addEventListener('click', () => { st.pdfs = []; st.result = null; showPdfs(); rebuild(); fail(''); });
 })();
 </script>
